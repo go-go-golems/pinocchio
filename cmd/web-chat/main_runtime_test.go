@@ -2,19 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
 	webchatruntime "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/runtime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webapp"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +31,7 @@ func readBody(t *testing.T, resp *http.Response) string {
 	return string(body)
 }
 
-func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Server) {
+func newMigratedRuntimeTestServer(t *testing.T) (*httpapi.Server, *httptest.Server) {
 	t.Helper()
 	profileRegistry, err := profiles.NewInMemoryProfileService(
 		"default",
@@ -34,7 +39,7 @@ func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Se
 	)
 	require.NoError(t, err)
 	resolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
-	canonicalApp, err := appserver.NewServer()
+	canonicalApp, err := httpapi.New(httpapi.WithRuntimeResolver(mockParityResolver()))
 	require.NoError(t, err)
 	appConfigJS, err := webapp.RuntimeConfigScript("")
 	require.NoError(t, err)
@@ -66,7 +71,7 @@ func TestCanonicalRuntimeResolver_MockParityProfileShortCircuitsNormalComposer(t
 		return infruntime.ComposedRuntime{}, nil
 	}))
 
-	composed, err := resolver.Resolve(context.Background(), httptest.NewRequest(http.MethodPost, "/api/chat/sessions/sess/messages", strings.NewReader(`{}`)), "sess", profiles.MockParityProfile, "")
+	composed, err := resolver.Resolve(context.Background(), httptest.NewRequest(http.MethodPost, "/api/chat/sessions/sess/messages", strings.NewReader(`{}`)), sessions.Info{ID: "sess"}, httpapi.MessageRequest{Profile: profiles.MockParityProfile})
 	require.NoError(t, err)
 	require.NotNil(t, composed)
 	require.IsType(t, &mockruntime.Engine{}, composed.Engine)
@@ -106,7 +111,7 @@ func TestBuildAppMux_ServesCanonicalRoutesAndRemovesLegacyRoute(t *testing.T) {
 	createResp, err := http.Post(httpSrv.URL+"/api/chat/sessions", "application/json", strings.NewReader(`{"profile":"default"}`))
 	require.NoError(t, err)
 	defer func() { _ = createResp.Body.Close() }()
-	require.Equal(t, http.StatusOK, createResp.StatusCode)
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 	require.Contains(t, readBody(t, createResp), "sessionId")
 
 	legacyResp, err := http.Post(httpSrv.URL+"/chat", "application/json", strings.NewReader(`{"prompt":"hello"}`))
@@ -127,7 +132,7 @@ func TestBuildRootHandler_MountsCanonicalAppUnderCustomRoot(t *testing.T) {
 	)
 	require.NoError(t, err)
 	resolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
-	canonicalApp, err := appserver.NewServer()
+	canonicalApp, err := httpapi.New(httpapi.WithRuntimeResolver(mockParityResolver()))
 	require.NoError(t, err)
 	defer func() { _ = canonicalApp.Close() }()
 
@@ -162,10 +167,68 @@ func TestBuildRootHandler_MountsCanonicalAppUnderCustomRoot(t *testing.T) {
 	createResp, err := http.Post(httpSrv.URL+"/chat/api/chat/sessions", "application/json", strings.NewReader(`{"profile":"default"}`))
 	require.NoError(t, err)
 	defer func() { _ = createResp.Body.Close() }()
-	require.Equal(t, http.StatusOK, createResp.StatusCode)
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
 	unprefixedResp, err := http.Post(httpSrv.URL+"/api/chat/sessions", "application/json", strings.NewReader(`{"profile":"default"}`))
 	require.NoError(t, err)
 	defer func() { _ = unprefixedResp.Body.Close() }()
 	require.Equal(t, http.StatusNotFound, unprefixedResp.StatusCode)
+}
+
+func mockParityResolver() httpapi.RuntimeResolver {
+	return httpapi.RuntimeResolverFunc(func(context.Context, *http.Request, sessions.Info, httpapi.MessageRequest) (*infruntime.ComposedRuntime, error) {
+		composed := mockruntime.NewComposedRuntime(mockruntime.Options{})
+		return &composed, nil
+	})
+}
+
+// The mock parity runtime streams reasoning, a backend tool call and text;
+// through the HTTP API they project into chat-message and tool-call entities.
+func TestMockParityRuntimeProjectsDeterministicEntitiesThroughHTTP(t *testing.T) {
+	srv, err := httpapi.New(
+		httpapi.WithAutoCreateSessions(true),
+		httpapi.WithRuntimeResolver(mockParityResolver()),
+		httpapi.WithChatPlugins(plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
+	)
+	require.NoError(t, err)
+	httpSrv := httptest.NewServer(srv.Handler())
+	t.Cleanup(func() {
+		httpSrv.Close()
+		_ = srv.Close()
+	})
+
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-mock/messages", "application/json", strings.NewReader(`{"prompt":"run deterministic parity","profile":"mock_parity"}`))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		snapResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-mock")
+		require.NoError(t, err)
+		var got httpapi.SessionResponse
+		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&got))
+		_ = snapResp.Body.Close()
+		if !got.Running && got.Snapshot.Status == "finished" {
+			kinds := map[string]bool{}
+			texts := []string{}
+			for _, entity := range got.Snapshot.Entities {
+				kinds[entity.Kind] = true
+				if payload, ok := entity.Payload.(map[string]any); ok {
+					for _, key := range []string{"text", "content"} {
+						if text, ok := payload[key].(string); ok {
+							texts = append(texts, text)
+						}
+					}
+				}
+			}
+			require.True(t, kinds[chatapp.TimelineEntityChatMessage])
+			require.True(t, kinds[plugins.TimelineEntityToolCall])
+			require.Contains(t, strings.Join(texts, "\n"), "Mock parity run complete")
+			require.Contains(t, strings.Join(texts, "\n"), "Inspecting deterministic inputs")
+			return
+		}
+		require.True(t, time.Now().Before(deadline), "timed out waiting for the mock parity run")
+		time.Sleep(10 * time.Millisecond)
+	}
 }

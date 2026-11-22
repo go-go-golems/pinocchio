@@ -1,4 +1,4 @@
-package appserver
+package httpapi
 
 import (
 	"errors"
@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
-	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
 type fullExportResponse struct {
@@ -16,11 +15,8 @@ type fullExportResponse struct {
 	Turns     *chatexport.TurnsExport    `json:"turns,omitempty" yaml:"turns,omitempty"`
 }
 
-func (s *Server) handleTimelineExport(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
-	}
+func (s *Server) handleTimelineExport(w http.ResponseWriter, r *http.Request, c *call) {
+	sid := c.sid
 	opts, err := parseExportOptions(r, chatexport.TimelineViewEntities)
 	if err != nil {
 		writeExportError(w, err)
@@ -38,11 +34,8 @@ func (s *Server) handleTimelineExport(w http.ResponseWriter, r *http.Request, si
 	writeRenderedExport(w, r, exported, opts.Format, fmt.Sprintf("pinocchio-%s-timeline", sid))
 }
 
-func (s *Server) handleTurnsExport(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
-	}
+func (s *Server) handleTurnsExport(w http.ResponseWriter, r *http.Request, c *call) {
+	sid := c.sid
 	opts, err := parseExportOptions(r, chatexport.TimelineViewEntities)
 	if err != nil {
 		writeExportError(w, err)
@@ -61,11 +54,8 @@ func (s *Server) handleTurnsExport(w http.ResponseWriter, r *http.Request, sid s
 	writeRenderedExport(w, r, exported, opts.Format, fmt.Sprintf("pinocchio-%s-turns", sid))
 }
 
-func (s *Server) handleFullExport(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
-	}
+func (s *Server) handleFullExport(w http.ResponseWriter, r *http.Request, c *call) {
+	sid := c.sid
 	opts, err := parseExportOptions(r, chatexport.TimelineViewEntities)
 	if err != nil {
 		writeExportError(w, err)
@@ -121,7 +111,7 @@ func writeRenderedExport(w http.ResponseWriter, r *http.Request, payload any, fo
 
 func writeExportError(w http.ResponseWriter, err error) {
 	status := exportHTTPStatus(err)
-	writeJSON(w, status, errorResponse{Error: err.Error()})
+	writeError(w, status, exportErrorCode(status), err)
 }
 
 func exportHTTPStatus(err error) int {
@@ -165,4 +155,17 @@ func sanitizeDownloadFilename(value string) string {
 		}
 	}
 	return b.String()
+}
+
+func exportErrorCode(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return CodeInvalidRequest
+	case http.StatusNotFound:
+		return "export_not_found"
+	case http.StatusConflict:
+		return "export_unavailable"
+	default:
+		return CodeInternal
+	}
 }

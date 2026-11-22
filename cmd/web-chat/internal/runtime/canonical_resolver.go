@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"time"
 
-	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
@@ -16,7 +17,7 @@ type canonicalRuntimeResolver struct {
 	runtimeComposer infruntime.RuntimeBuilder
 }
 
-func NewCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runtimeComposer infruntime.RuntimeBuilder) appserver.RuntimeResolver {
+func NewCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runtimeComposer infruntime.RuntimeBuilder) httpapi.RuntimeResolver {
 	if requestResolver == nil || runtimeComposer == nil {
 		return nil
 	}
@@ -26,7 +27,8 @@ func NewCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runt
 	}
 }
 
-func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Request, sessionID string, profile string, registry string) (*infruntime.ComposedRuntime, error) {
+func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, _ *http.Request, session sessions.Info, msg httpapi.MessageRequest) (*infruntime.ComposedRuntime, error) {
+	sessionID, profile, registry := session.ID, msg.Profile, msg.Registry
 	if r == nil || r.requestResolver == nil || r.runtimeComposer == nil {
 		return nil, nil
 	}

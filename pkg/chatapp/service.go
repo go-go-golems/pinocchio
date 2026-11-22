@@ -120,6 +120,13 @@ func (s *Service) Stop(ctx context.Context, sid sessionstream.SessionId) error {
 	return s.hub.Submit(ctx, sid, CommandStopInference, &chatappv1.StopInferenceCommand{})
 }
 
+// Running reports whether the session has an active run. Unlike a timeline
+// snapshot, it is exact: a run stopped before any output leaves no assistant
+// entity in the timeline.
+func (s *Service) Running(sid sessionstream.SessionId) bool {
+	return s != nil && s.engine != nil && s.engine.Running(sid)
+}
+
 func (s *Service) WaitIdle(ctx context.Context, sid sessionstream.SessionId) error {
 	if s == nil || s.engine == nil {
 		return fmt.Errorf("chat engine is not initialized")

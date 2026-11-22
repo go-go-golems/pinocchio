@@ -1,9 +1,8 @@
-package appserver
+package httpapi
 
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -20,6 +19,7 @@ func (p *hydrationSnapshotProvider) Snapshot(_ context.Context, sid sessionstrea
 	return p.server.Snapshot(sid)
 }
 
+// Snapshot returns a session's timeline snapshot.
 func (s *Server) Snapshot(sessionID sessionstream.SessionId) (sessionstream.Snapshot, error) {
 	if s == nil || s.service == nil {
 		return sessionstream.Snapshot{}, fmt.Errorf("server is not initialized")
@@ -27,24 +27,11 @@ func (s *Server) Snapshot(sessionID sessionstream.SessionId) (sessionstream.Snap
 	return s.service.Snapshot(context.Background(), sessionID)
 }
 
-func (s *Server) handleSessionSnapshot(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
-	}
-	snap, err := s.service.Snapshot(r.Context(), sid)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, encodeSnapshotResponse(snap))
-}
-
-func encodeSnapshotResponse(snap sessionstream.Snapshot) SessionSnapshotResponse {
+func encodeSnapshotResponse(snap sessionstream.Snapshot) serverkit.SessionSnapshotResponse {
 	return serverkit.EncodeSnapshotResponse(snap, snapshotStatus)
 }
 
-func snapshotStatus(entities []SnapshotEntity) string {
+func snapshotStatus(entities []serverkit.SnapshotEntity) string {
 	hasUser := false
 	hasNonUserStatus := false
 	fallbackStatus := ""

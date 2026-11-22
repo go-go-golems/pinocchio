@@ -285,6 +285,11 @@ func Install(hub *sessionstream.Hub, engine *Engine) error {
 	return nil
 }
 
+// Running reports whether the session has an active run.
+func (e *Engine) Running(sid sessionstream.SessionId) bool {
+	return e.currentRun(sid) != nil
+}
+
 func (e *Engine) WaitIdle(ctx context.Context, sid sessionstream.SessionId) error {
 	for {
 		run := e.currentRun(sid)

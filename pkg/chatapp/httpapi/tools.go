@@ -1,14 +1,14 @@
-package appserver
+package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
-	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -54,14 +54,10 @@ type frontendToolResultResponse struct {
 	Status   string `json:"status"`
 }
 
-func (s *Server) handleFrontendToolManifest(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
-	}
+func (s *Server) handleFrontendToolManifest(w http.ResponseWriter, r *http.Request, c *call) {
+	sid := c.sid
 	var in frontendToolManifestRequest
-	if err := serverkit.DecodeJSON(r, &in); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "bad request"})
+	if _, ok := s.decodeBody(w, r, &in); !ok {
 		return
 	}
 	descriptors := make([]*toolv1.FrontendToolDescriptor, 0, len(in.Tools))
@@ -72,7 +68,7 @@ func (s *Server) handleFrontendToolManifest(w http.ResponseWriter, r *http.Reque
 		}
 		inputSchema, err := structpb.NewStruct(tool.InputSchema)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: fmt.Sprintf("bad input schema for %s", name)})
+			writeError(w, http.StatusBadRequest, CodeInvalidRequest, fmt.Errorf("bad input schema for %s: %w", name, err))
 			return
 		}
 		descriptors = append(descriptors, &toolv1.FrontendToolDescriptor{
@@ -83,18 +79,18 @@ func (s *Server) handleFrontendToolManifest(w http.ResponseWriter, r *http.Reque
 			Available:   tool.Available,
 		})
 	}
-	if s.frontendToolManager == nil || s.hub == nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "frontend tools are not configured"})
+	if s.frontendTools == nil || s.hub == nil {
+		writeError(w, http.StatusNotFound, CodeFrontendToolsDisabled, errors.New("frontend tools are not configured"))
 		return
 	}
-	updated, err := s.frontendToolManager.AcceptManifest(r.Context(), sid, s.hub, &toolv1.FrontendToolManifestCommand{
+	updated, err := s.frontendTools.AcceptManifest(r.Context(), sid, s.hub, &toolv1.FrontendToolManifestCommand{
 		Tools:            descriptors,
 		Revision:         in.Revision,
 		ClientInstanceId: strings.TrimSpace(in.ClientInstanceID),
 		ConnectionId:     strings.TrimSpace(in.ConnectionID),
 	})
 	if err != nil {
-		writeJSON(w, frontendToolManifestErrorStatus(err), errorResponse{Error: err.Error()})
+		writeError(w, frontendToolManifestErrorStatus(err), frontendToolErrorCode(err), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, frontendToolManifestResponse{
@@ -148,25 +144,21 @@ func frontendToolMode(mode string) toolv1.ToolExecutionMode {
 	}
 }
 
-func (s *Server) handleFrontendToolResult(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
-	}
+func (s *Server) handleFrontendToolResult(w http.ResponseWriter, r *http.Request, c *call) {
+	sid := c.sid
 	var in frontendToolResultRequest
-	if err := serverkit.DecodeJSON(r, &in); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "bad request"})
+	if _, ok := s.decodeBody(w, r, &in); !ok {
 		return
 	}
 	in.ToolCallID = strings.TrimSpace(in.ToolCallID)
 	in.ToolName = strings.TrimSpace(in.ToolName)
 	in.Status = strings.TrimSpace(in.Status)
 	if in.ToolCallID == "" {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing toolCallId"})
+		writeError(w, http.StatusBadRequest, CodeInvalidRequest, errors.New("missing toolCallId"))
 		return
 	}
 	if in.ToolName == "" {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing toolName"})
+		writeError(w, http.StatusBadRequest, CodeInvalidRequest, errors.New("missing toolName"))
 		return
 	}
 	if in.Status == "" {
@@ -176,7 +168,7 @@ func (s *Server) handleFrontendToolResult(w http.ResponseWriter, r *http.Request
 		in.Result = map[string]any{}
 	}
 	if err := s.publishFrontendToolResult(r.Context(), sid, in); err != nil {
-		writeJSON(w, frontendToolResultErrorStatus(err), errorResponse{Error: err.Error()})
+		writeError(w, frontendToolResultErrorStatus(err), frontendToolErrorCode(err), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, frontendToolResultResponse{Accepted: true, Status: in.Status})
@@ -224,4 +216,15 @@ func (s *Server) publishFrontendToolResult(ctx context.Context, sid sessionstrea
 		Error:      result.Error,
 		Executor:   result.Executor.toProto(),
 	})
+}
+
+// frontendToolErrorCode is the frontendtools error code of err, if any.
+func frontendToolErrorCode(err error) string {
+	if code, ok := frontendtools.InvocationErrorCodeOf(err); ok {
+		return string(code)
+	}
+	if code, ok := frontendtools.ManifestErrorCodeOf(err); ok {
+		return string(code)
+	}
+	return CodeInternal
 }

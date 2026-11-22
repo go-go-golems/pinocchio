@@ -1,0 +1,307 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/google/uuid"
+
+	"github.com/go-go-golems/geppetto/pkg/turns"
+
+	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+)
+
+// call is one authorized request on one session.
+type call struct {
+	principal Principal
+	info      sessions.Info
+	sid       sessionstream.SessionId
+}
+
+var errInvalidSessionID = errors.New("httpapi: session ids are 1-128 characters of [A-Za-z0-9._:-]")
+
+func validSessionID(id string) bool {
+	if id == "" || len(id) > 128 {
+		return false
+	}
+	for _, c := range id {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '_', c == ':', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// session wraps a handler for /sessions/{id}/...: it authenticates, finds (or
+// auto-creates) the session and authorizes the action.
+func (s *Server) session(action Action, fn func(http.ResponseWriter, *http.Request, *call)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p, ok := s.authenticateRequest(w, r)
+		if !ok {
+			return
+		}
+		r = r.WithContext(withPrincipal(r.Context(), p))
+		id := r.PathValue("id")
+		if !validSessionID(id) {
+			writeError(w, http.StatusBadRequest, CodeInvalidSessionID, errInvalidSessionID)
+			return
+		}
+		info, err := s.lookup(r.Context(), p, id, action)
+		if err != nil {
+			writeLookupError(w, err)
+			return
+		}
+		fn(w, r, &call{principal: p, info: info, sid: sessionstream.SessionId(id)})
+	}
+}
+
+// lookup returns the session for an action, creating it first when
+// auto-creation is on and the action may create.
+func (s *Server) lookup(ctx context.Context, p Principal, id string, action Action) (sessions.Info, error) {
+	info, err := s.sessionStore.Get(ctx, id)
+	if errors.Is(err, sessions.ErrNotFound) && s.autoCreate && action != ActionDelete && action != ActionStop {
+		if err := s.authorize(ctx, p, ActionCreate, nil); err != nil {
+			return sessions.Info{}, forbiddenError{err}
+		}
+		if err := s.sessionStore.Create(ctx, sessions.Info{ID: id, Owner: p.ID}); err != nil && !errors.Is(err, sessions.ErrExists) {
+			return sessions.Info{}, err
+		}
+		info, err = s.sessionStore.Get(ctx, id)
+	}
+	if err != nil {
+		return sessions.Info{}, err
+	}
+	if err := s.authorize(ctx, p, action, &info); err != nil {
+		return sessions.Info{}, forbiddenError{err}
+	}
+	return info, nil
+}
+
+func writeLookupError(w http.ResponseWriter, err error) {
+	var forbidden forbiddenError
+	switch {
+	case errors.Is(err, sessions.ErrNotFound):
+		writeError(w, http.StatusNotFound, CodeSessionNotFound, err)
+	case errors.As(err, &forbidden):
+		writeError(w, http.StatusForbidden, CodeForbidden, err)
+	case errors.Is(err, errInvalidSessionID):
+		writeError(w, http.StatusBadRequest, CodeInvalidSessionID, err)
+	default:
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+	}
+}
+
+func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.authenticateRequest(w, r)
+	if !ok {
+		return
+	}
+	ctx := withPrincipal(r.Context(), p)
+	if err := s.authorize(ctx, p, ActionCreate, nil); err != nil {
+		writeError(w, http.StatusForbidden, CodeForbidden, err)
+		return
+	}
+	var in CreateSessionRequest
+	if _, ok := s.decodeBody(w, r, &in); !ok {
+		return
+	}
+	id := strings.TrimSpace(in.ID)
+	if id == "" {
+		id = uuid.NewString()
+	}
+	if !validSessionID(id) {
+		writeError(w, http.StatusBadRequest, CodeInvalidSessionID, errInvalidSessionID)
+		return
+	}
+	err := s.sessionStore.Create(ctx, sessions.Info{ID: id, Owner: p.ID, Title: strings.TrimSpace(in.Title), Labels: in.Labels})
+	if errors.Is(err, sessions.ErrExists) {
+		writeError(w, http.StatusConflict, CodeSessionExists, err)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	info, err := s.sessionStore.Get(ctx, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, SessionResponse{SessionID: id, Session: info})
+}
+
+// handleList answers GET /sessions. An authenticated principal sees only its
+// own sessions. ?label=k:v (repeatable) filters on labels, ?limit=n limits.
+func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.authenticateRequest(w, r)
+	if !ok {
+		return
+	}
+	ctx := withPrincipal(r.Context(), p)
+	if err := s.authorize(ctx, p, ActionList, nil); err != nil {
+		writeError(w, http.StatusForbidden, CodeForbidden, err)
+		return
+	}
+	filter := sessions.Filter{Owner: p.ID}
+	for _, raw := range r.URL.Query()["label"] {
+		k, v, found := strings.Cut(raw, ":")
+		if !found || strings.TrimSpace(k) == "" {
+			writeError(w, http.StatusBadRequest, CodeInvalidRequest, errors.New("label filters are key:value"))
+			return
+		}
+		if filter.Labels == nil {
+			filter.Labels = map[string]string{}
+		}
+		filter.Labels[strings.TrimSpace(k)] = strings.TrimSpace(v)
+	}
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			writeError(w, http.StatusBadRequest, CodeInvalidRequest, errors.New("limit must be a non-negative integer"))
+			return
+		}
+		filter.Limit = n
+	}
+	list, err := s.sessionStore.List(ctx, filter)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	if list == nil {
+		list = []sessions.Info{}
+	}
+	writeJSON(w, http.StatusOK, SessionListResponse{Sessions: list})
+}
+
+func (s *Server) handleGet(w http.ResponseWriter, r *http.Request, c *call) {
+	snap, err := s.service.Snapshot(r.Context(), c.sid)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	encoded := encodeSnapshotResponse(snap)
+	writeJSON(w, http.StatusOK, SessionResponse{SessionID: string(c.sid), Session: c.info, Running: s.service.Running(c.sid), Snapshot: &encoded})
+}
+
+// handleDelete stops a running turn, waits for it to end, closes the
+// session's event streams and deletes the metadata. The conversation in the
+// turn store and the timeline in the hydration store remain.
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, c *call) {
+	if err := s.service.Stop(r.Context(), c.sid); err != nil {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	waitCtx, cancel := context.WithTimeout(r.Context(), shutdownTimeout)
+	defer cancel()
+	if err := s.service.WaitIdle(waitCtx, c.sid); err != nil {
+		log.Warn().Err(err).Str("session", string(c.sid)).Msg("httpapi: delete: run did not end in time")
+	}
+	s.sse.closeSession(c.sid)
+	if err := s.sessionStore.Delete(r.Context(), string(c.sid)); err != nil && !errors.Is(err, sessions.ErrNotFound) {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleStop(w http.ResponseWriter, r *http.Request, c *call) {
+	if err := s.service.Stop(r.Context(), c.sid); err != nil {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, AcceptedResponse{SessionID: string(c.sid), Accepted: true})
+}
+
+// handleMessage starts a run: it resolves the runtime, asks the BlocksFunc
+// for the application's blocks and submits the prompt. A session with a
+// running turn answers 409 run_active (chatapp.BusyReject, the default), and
+// nothing of the refused message is published.
+func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) {
+	var msg MessageRequest
+	raw, ok := s.decodeBody(w, r, &msg)
+	if !ok {
+		return
+	}
+	msg.Raw = raw
+	attachments := make([]chatapp.Attachment, 0, len(msg.Attachments))
+	for _, ref := range msg.Attachments {
+		id := strings.TrimSpace(ref.AttachmentID)
+		if id == "" {
+			writeError(w, http.StatusBadRequest, CodeInvalidRequest, errors.New("attachment_id must not be empty"))
+			return
+		}
+		attachments = append(attachments, chatapp.Attachment{ID: id, Kind: chatapp.AttachmentKindImage})
+	}
+	if strings.TrimSpace(msg.Prompt) == "" && len(attachments) == 0 {
+		writeError(w, http.StatusBadRequest, CodeInvalidRequest, errors.New("a message needs a prompt or attachments"))
+		return
+	}
+	runtime, err := s.resolver.Resolve(r.Context(), r, c.info, msg)
+	if err != nil {
+		code := CodeRuntimeError
+		var coded chatapp.CodedError
+		if errors.As(err, &coded) {
+			code = coded.Code()
+		}
+		writeError(w, http.StatusBadRequest, code, err)
+		return
+	}
+	var blocks []turns.Block
+	if s.blocks != nil {
+		blocks, err = s.blocks(r.Context(), c.info, msg)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, CodeInvalidRequest, err)
+			return
+		}
+	}
+	err = s.service.SubmitPromptRequest(r.Context(), c.sid, chatapp.PromptRequest{
+		Prompt:         msg.Prompt,
+		Attachments:    attachments,
+		IdempotencyKey: msg.IdempotencyKey,
+		Runtime:        runtime,
+		Blocks:         blocks,
+	})
+	switch {
+	case errors.Is(err, chatapp.ErrRunActive):
+		writeError(w, http.StatusConflict, CodeRunActive, err)
+		return
+	case errors.Is(err, chatapp.ErrNoRuntime):
+		writeError(w, http.StatusInternalServerError, CodeNoRuntime, err)
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
+	if c.info.Title == "" && strings.TrimSpace(msg.Prompt) != "" {
+		title := sessions.TitleFrom(msg.Prompt, 80)
+		if err := s.sessionStore.Update(r.Context(), string(c.sid), func(info *sessions.Info) error {
+			if info.Title == "" {
+				info.Title = title
+			}
+			return nil
+		}); err != nil {
+			log.Warn().Err(err).Str("session", string(c.sid)).Msg("httpapi: set session title")
+		}
+	}
+	writeJSON(w, http.StatusAccepted, AcceptedResponse{SessionID: string(c.sid), Accepted: true})
+}
+
+func readBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, error) {
+	if r.Body == nil {
+		return nil, nil
+	}
+	defer func() { _ = r.Body.Close() }()
+	return io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+}
+
+func asMaxBytes(err error, target **http.MaxBytesError) bool {
+	return errors.As(err, target)
+}
