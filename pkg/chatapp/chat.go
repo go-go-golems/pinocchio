@@ -85,10 +85,22 @@ type RunScope struct {
 
 // RunTools is the tool setup of one run: the registry the model sees and the
 // executor that runs its calls. A nil Registry means a single model call
-// without tools.
+// without tools; a nil Executor means geppetto's default executor built from
+// Config. Config is the run's tool configuration (the runtime's ToolConfig or
+// geppetto's default); changing it has no effect.
 type RunTools struct {
 	Registry geptools.ToolRegistry
 	Executor geptools.ToolExecutor
+	Config   geptools.ToolConfig
+}
+
+// ExecutorOrDefault is Executor, or the executor geppetto would use for a nil
+// one. Wrap this, not Executor, so a wrapper keeps the run's tool config.
+func (t RunTools) ExecutorOrDefault() geptools.ToolExecutor {
+	if t.Executor != nil {
+		return t.Executor
+	}
+	return geptools.NewDefaultToolExecutor(t.Config)
 }
 
 // RunToolsFunc adjusts the tools of one run before it starts. It receives the

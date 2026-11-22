@@ -10,6 +10,7 @@ import (
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
@@ -118,7 +119,10 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		}
 	}
 
-	tools := RunTools{Registry: runtime.Registry, Executor: runtime.ToolExecutor}
+	tools := RunTools{Registry: runtime.Registry, Executor: runtime.ToolExecutor, Config: geptools.DefaultToolConfig()}
+	if runtime.ToolConfig != nil {
+		tools.Config = *runtime.ToolConfig
+	}
 	for _, fn := range e.runTools {
 		nextCtx, nextTools, err := fn(runCtx, RunScope{SessionID: sid, MessageID: messageID, Publisher: pub}, tools)
 		if err != nil {
@@ -128,6 +132,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		if nextCtx != nil {
 			runCtx = nextCtx
 		}
+		nextTools.Config = tools.Config
 		tools = nextTools
 	}
 

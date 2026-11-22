@@ -271,7 +271,7 @@ func (m *Manager) RunTools() chatapp.RunToolsFunc {
 			return ctx, tools, err
 		}
 		ctx = WithBridgeContext(ctx, BridgeContext{SessionID: run.SessionID, MessageID: run.MessageID, Publisher: run.Publisher})
-		return ctx, chatapp.RunTools{Registry: registry, Executor: NewBridgeExecutor(m, tools.Executor)}, nil
+		return ctx, chatapp.RunTools{Registry: registry, Executor: NewBridgeExecutor(m, tools.ExecutorOrDefault()), Config: tools.Config}, nil
 	}
 }
 
