@@ -8,4 +8,4 @@
 - [x] Phase 4: slop-computer on the shared client and server helpers <!-- t:hft8 -->
 - [x] Phase 5: homolog-bench on agentserver + shared client (hb-server, eval tool, presets, agent.js, evalrun) <!-- t:sfbi -->
 - [ ] Phase 6 (later ticket): react-chat chat-provider on the shared Timeline <!-- t:4fn1 -->
-- [ ] Project report for the Obsidian vault (deep dive), committed and pushed <!-- t:gbq8 -->
+- [x] Project report for the Obsidian vault (deep dive), committed and pushed <!-- t:gbq8 -->
