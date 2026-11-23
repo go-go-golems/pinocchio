@@ -6,7 +6,7 @@
   "scripts": {
     "build": "esbuild src/index.ts --bundle --format=esm --target=es2022 --legal-comments=none --outfile=chatapp-client.js",
     "check": "tsc --noEmit",
-    "test": "node --test test/"
+    "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

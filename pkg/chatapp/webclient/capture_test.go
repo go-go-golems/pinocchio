@@ -271,7 +271,11 @@ func TestTheClientAgreesWithTheServer(t *testing.T) {
 	if err != nil {
 		t.Skip("node is not installed: the captures were made, the client was not checked against them")
 	}
-	cmd := exec.Command(node, "--test", "test/")
+	// explicit files: Node 22 reads "--test test/" as a module path, not a directory
+	files, err := filepath.Glob("test/*.test.mjs")
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+	cmd := exec.Command(node, append([]string{"--test"}, files...)...)
 	cmd.Env = append(os.Environ(), "CHATAPP_CAPTURES="+dir)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "client tests on the captures:\n%s", out)
