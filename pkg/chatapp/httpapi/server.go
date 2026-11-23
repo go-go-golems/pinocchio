@@ -37,6 +37,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi/internal/sessionguard"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/webclient"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -348,6 +349,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+p+"/sessions/{id}/turns", s.session(ActionRead, s.handleTurnsExport))
 	mux.HandleFunc("GET "+p+"/sessions/{id}/export", s.session(ActionRead, s.handleFullExport))
 	mux.HandleFunc("GET "+p+"/ws", s.handleWS)
+	mux.Handle("GET "+p+"/client.js", webclient.Handler()) // the browser client of this API
 }
 
 // Handler returns a handler serving only the server's routes.

@@ -1,0 +1,33 @@
+name: webclient-check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pkg/chatapp/**'
+      - 'proto/pinocchio/chatapp/**'
+  pull_request:
+    paths:
+      - 'pkg/chatapp/**'
+      - 'proto/pinocchio/chatapp/**'
+
+jobs:
+  webclient:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: pkg/chatapp/webclient/package-lock.json
+      # the committed bundle is the build of src/, and the client agrees with
+      # the server's projections on captured conversations
+      - name: Build, compare, and check against the server
+        run: make webclient-check

@@ -1,0 +1,15 @@
+{
+  "name": "@go-go-golems/chatapp-client",
+  "private": true,
+  "type": "module",
+  "description": "Browser client of pinocchio's chatapp HTTP API; the built chatapp-client.js is embedded in the Go module (webclient.go).",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --target=es2022 --legal-comments=none --outfile=chatapp-client.js",
+    "check": "tsc --noEmit",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3"
+  }
+}

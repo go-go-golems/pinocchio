@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-go-go-golems install codeql-local geppetto-lint-build geppetto-lint glazed-lint-build glazed-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet fetch-spa clean-spa build-with-spa logcopter-generate logcopter-check
+.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-go-go-golems install codeql-local geppetto-lint-build geppetto-lint glazed-lint-build glazed-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet fetch-spa clean-spa build-with-spa logcopter-generate logcopter-check webclient webclient-check
 
 all: test build
 
@@ -106,6 +106,16 @@ proto-gen: proto-gen-core
 schema-vet:
 	go build -o $(SESSIONSTREAM_LINT) $(SESSIONSTREAM_LINT_PKG)
 	go vet -vettool=$(SESSIONSTREAM_LINT) ./cmd/... ./pkg/...
+
+# The browser client of chatapp's HTTP API (pkg/chatapp/webclient): rebuild the
+# embedded chatapp-client.js after changing its src/; the check fails when the
+# committed file differs from a fresh build.
+webclient:
+	cd pkg/chatapp/webclient && npm ci && npm run check && npm run build
+
+webclient-check: webclient
+	git diff --exit-code -- pkg/chatapp/webclient/chatapp-client.js
+	cd pkg/chatapp/webclient && go test . -run TestTheClientAgreesWithTheServer -count=1
 
 logcopter-generate:
 	go generate ./...
