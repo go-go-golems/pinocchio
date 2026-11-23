@@ -169,19 +169,19 @@ func firstNonEmptyString(values ...string) string {
 func reasoningEntityFromEvent(ev sessionstream.Event, view sessionstream.TimelineView) (string, *chatappv1.ChatMessageEntity, bool, error) {
 	switch payload := ev.Payload.(type) {
 	case *chatappv1.ChatReasoningSegmentStarted:
-		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), "", "", payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
+		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), "", "", payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name, payload.GetAtMs())
 	case *chatappv1.ChatReasoningPatch:
 		entity, _ := currentReasoningEntity(view, payload.GetMessageId())
 		content := chatapp.ApplyStreamPatch(firstNonEmptyString(entity.GetContent(), entity.GetText()), payload.GetText(), payload.GetMode())
-		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), content, content, payload.GetStatus(), !payload.GetFinal(), payload.GetCorrelation(), ev.Name)
+		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), content, content, payload.GetStatus(), !payload.GetFinal(), payload.GetCorrelation(), ev.Name, payload.GetAtMs())
 	case *chatappv1.ChatReasoningSegmentFinished:
-		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), payload.GetContent(), payload.GetText(), payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
+		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), payload.GetContent(), payload.GetText(), payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name, payload.GetAtMs())
 	default:
 		return "", nil, false, nil
 	}
 }
 
-func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, parentMessageID, role, content, text, status string, streaming bool, corr *chatappv1.CorrelationInfo, eventName string) (string, *chatappv1.ChatMessageEntity, bool, error) {
+func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, parentMessageID, role, content, text, status string, streaming bool, corr *chatappv1.CorrelationInfo, eventName string, atMs int64) (string, *chatappv1.ChatMessageEntity, bool, error) {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return "", nil, true, nil
@@ -201,6 +201,7 @@ func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, paren
 	entity.ParentMessageId = firstNonEmptyString(parentMessageID, entity.GetParentMessageId())
 	entity.Correlation = chatapp.MergeCorrelationInfo(entity.GetCorrelation(), corr)
 	entity.SegmentType = gepevents.SegmentTypeReasoning
+	chatapp.StartAt(entity, atMs)
 	switch eventName {
 	case ReasoningStartedEventName, ReasoningPatchEventName:
 		entity.Status = firstNonEmptyString(status, "streaming")
@@ -208,6 +209,7 @@ func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, paren
 	case ReasoningFinishedEventName:
 		entity.Status = firstNonEmptyString(status, "finished")
 		entity.Streaming = false
+		entity.FinishedAtMs = atMs
 	default:
 		return "", nil, false, nil
 	}

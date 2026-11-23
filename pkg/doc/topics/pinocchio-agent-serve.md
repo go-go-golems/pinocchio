@@ -110,7 +110,11 @@ data: {"sessionId":"…","ordinal":"13","name":"ChatTextPatch","payload":{…}}
 
 Every run is a `ChatRun` entity in the snapshot (id = the run's `messageId`; `status` running, finished, failed or
 stopped; `code`, `error`, `truncated`, `reason`), so a client that reconnects learns how a run ended even when it
-missed the terminal event, and a run stopped before any output is visible.
+missed the terminal event, and a run stopped before any output is visible. The entity is also the answer's record:
+`model`, `startedAtMs`, `finishedAtMs` (0 while running), `usage` summed over the run's model calls, and
+`providerCalls`. Message, thinking and tool-call entities carry `startedAtMs` and `finishedAtMs` (browser tool calls:
+`requestedAtMs`, `finishedAtMs`); a tool call that waits for a person has `state: "awaiting-person"`. All times are
+milliseconds since the epoch on the server's clock, so a page shows durations without measuring them itself.
 
 The stream never skips or repeats an event between the snapshot and the live events. A reconnecting client reads a
 new snapshot; `Last-Event-ID` is ignored. A client that falls too far behind gets `event: error` with

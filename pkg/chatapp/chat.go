@@ -41,6 +41,7 @@ const (
 	EventChatToolExecutionStarted        = "ChatToolExecutionStarted"
 	EventChatToolResultReady             = "ChatToolResultReady"
 	EventChatToolCallFinished            = "ChatToolCallFinished"
+	EventChatToolCallProgress            = "ChatToolCallProgress"
 
 	TimelineEntityChatMessage = "ChatMessage"
 	TimelineEntityChatRun     = "ChatRun"

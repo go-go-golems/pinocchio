@@ -50,6 +50,10 @@ message ChatRunStarted {
   string message_id = 1;
   string prompt = 2;
   CorrelationInfo correlation = 3;
+  // ms since the epoch (server clock)
+  int64 started_at_ms = 4;
+  // the model the run uses (ComposedRuntime.Model), for display
+  string model = 5;
 }
 
 message ChatRunFinished {
@@ -63,6 +67,7 @@ message ChatRunFinished {
   bool truncated = 6;
   // reason says why a truncated run ended, e.g. "max_rounds".
   string reason = 7;
+  int64 finished_at_ms = 8;
 }
 
 message ChatRunStopped {
@@ -70,6 +75,7 @@ message ChatRunStopped {
   string status = 2;
   string error = 3;
   CorrelationInfo correlation = 4;
+  int64 finished_at_ms = 5;
 }
 
 message ChatRunFailed {
@@ -81,6 +87,7 @@ message ChatRunFailed {
   // authentication_error, rate_limited, prompt_too_large, upstream_error, or a
   // code supplied by the caller's error (an error with a Code() string method).
   string code = 5;
+  int64 finished_at_ms = 6;
 }
 
 message ChatProviderCallStarted {
@@ -100,6 +107,8 @@ message ChatProviderCallFinished {
   optional int64 duration_ms = 4;
   bool has_tool_calls = 5;
   CorrelationInfo correlation = 6;
+  // the run (message id) the call belongs to
+  string message_id = 7;
 }
 
 message ChatTextSegmentStarted {
@@ -109,6 +118,7 @@ message ChatTextSegmentStarted {
   string status = 4;
   bool streaming = 5;
   CorrelationInfo correlation = 6;
+  int64 at_ms = 7;
 }
 
 enum ChatStreamPatchMode {
@@ -131,6 +141,7 @@ message ChatTextPatch {
   string finish_reason = 10;
   string prompt = 11;
   CorrelationInfo correlation = 12;
+  int64 at_ms = 13;
 }
 
 // ChatTextDelta is the compact, ephemeral UI representation of a
@@ -153,6 +164,7 @@ message ChatTextSegmentFinished {
   bool final = 8;
   string finish_reason = 9;
   CorrelationInfo correlation = 10;
+  int64 at_ms = 11;
 }
 
 // ChatReasoningDelta is the compact, ephemeral UI representation of a
@@ -173,6 +185,7 @@ message ChatReasoningSegmentStarted {
   bool streaming = 5;
   string source = 6;
   CorrelationInfo correlation = 7;
+  int64 at_ms = 8;
 }
 
 message ChatReasoningPatch {
@@ -189,6 +202,7 @@ message ChatReasoningPatch {
   string source = 11;
   string finish_reason = 12;
   CorrelationInfo correlation = 13;
+  int64 at_ms = 14;
 }
 
 message ChatReasoningSegmentFinished {
@@ -202,6 +216,7 @@ message ChatReasoningSegmentFinished {
   string source = 8;
   string finish_reason = 9;
   CorrelationInfo correlation = 10;
+  int64 at_ms = 11;
 }
 
 message ChatToolCallStarted {
@@ -257,6 +272,7 @@ message ChatToolExecutionStarted {
   bool executing = 5;
   string status = 6;
   CorrelationInfo correlation = 7;
+  int64 at_ms = 8;
 }
 
 message ChatToolResultReady {
@@ -266,6 +282,7 @@ message ChatToolResultReady {
   string result = 4;
   string status = 5;
   CorrelationInfo correlation = 6;
+  int64 at_ms = 7;
 }
 
 message ChatToolCallFinished {
@@ -274,6 +291,19 @@ message ChatToolCallFinished {
   string tool_name = 3;
   string status = 4;
   CorrelationInfo correlation = 5;
+  int64 at_ms = 6;
+}
+
+// ChatToolCallProgress says what an executing tool call is doing: that it
+// waits for a person ("awaiting-person", with that limit) or runs again
+// ("running"). Published through toolexec's deadline middleware
+// (toolexec.AwaitPerson).
+message ChatToolCallProgress {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string state = 3;
+  int64 limit_ms = 4;
+  int64 at_ms = 5;
 }
 
 message ChatUserMessageAccepted {
@@ -284,6 +314,8 @@ message ChatUserMessageAccepted {
   string content = 5;
   string status = 6;
   repeated ChatAttachment attachments = 7;
+  // when the server accepted the message (ms since the epoch, server clock)
+  int64 at_ms = 8;
 }
 
 // ChatRunEntity is a run's lifecycle in the timeline, so a snapshot holds
@@ -301,6 +333,14 @@ message ChatRunEntity {
   // finished at the round limit with a final answer (ChatRunFinished)
   bool truncated = 6;
   string reason = 7;
+  // the run's model (ChatRunStarted.model)
+  string model = 8;
+  // ms since the epoch (server clock); finished_at_ms is 0 while the run runs
+  int64 started_at_ms = 9;
+  int64 finished_at_ms = 10;
+  // summed over the run's provider calls (ChatProviderCallFinished.message_id)
+  UsageInfo usage = 11;
+  int32 provider_calls = 12;
 }
 
 message ChatMessageEntity {
@@ -318,6 +358,9 @@ message ChatMessageEntity {
   bool final = 12;
   CorrelationInfo correlation = 13;
   repeated ChatAttachment attachments = 14;
+  // ms since the epoch (server clock): the segment's first and last event; for a user message, when it was accepted
+  int64 started_at_ms = 15;
+  int64 finished_at_ms = 16;
 }
 
 message AgentModePreviewUpdate {
@@ -358,6 +401,11 @@ message ToolCallEntity {
   bool executing = 5;
   string status = 6;
   CorrelationInfo correlation = 7;
+  // ms since the epoch (server clock): execution start and end
+  int64 started_at_ms = 8;
+  int64 finished_at_ms = 9;
+  // what the call is doing while it executes: "running" or "awaiting-person" (ChatToolCallProgress)
+  string state = 10;
 }
 
 message ToolResultEntity {

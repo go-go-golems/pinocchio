@@ -24,6 +24,9 @@ const (
 	EventToolResultReady = chatapp.EventChatToolResultReady
 	// EventToolCallFinished is published when a tool call completes.
 	EventToolCallFinished = chatapp.EventChatToolCallFinished
+	// EventToolCallProgress says what an executing call is doing (e.g. it waits
+	// for a person); published through toolexec's deadline middleware.
+	EventToolCallProgress = chatapp.EventChatToolCallProgress
 
 	// TimelineEntityToolCall is the timeline entity kind for tool calls.
 	TimelineEntityToolCall = "ChatToolCall"
@@ -47,12 +50,14 @@ func (p *ToolCallPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) erro
 		reg.RegisterEvent(EventToolExecutionStarted, &chatappv1.ChatToolExecutionStarted{}),
 		reg.RegisterEvent(EventToolResultReady, &chatappv1.ChatToolResultReady{}),
 		reg.RegisterEvent(EventToolCallFinished, &chatappv1.ChatToolCallFinished{}),
+		reg.RegisterEvent(EventToolCallProgress, &chatappv1.ChatToolCallProgress{}),
 		reg.RegisterUIEvent(EventToolCallStarted, &chatappv1.ChatToolCallStarted{}),
 		reg.RegisterUIEvent(EventToolArgumentsPatch, &chatappv1.ChatToolArgumentsPatch{}),
 		reg.RegisterUIEvent(EventToolCallRequested, &chatappv1.ChatToolCallRequested{}),
 		reg.RegisterUIEvent(EventToolExecutionStarted, &chatappv1.ChatToolExecutionStarted{}),
 		reg.RegisterUIEvent(EventToolResultReady, &chatappv1.ChatToolResultReady{}),
 		reg.RegisterUIEvent(EventToolCallFinished, &chatappv1.ChatToolCallFinished{}),
+		reg.RegisterUIEvent(EventToolCallProgress, &chatappv1.ChatToolCallProgress{}),
 		reg.RegisterTimelineEntity(TimelineEntityToolCall, &chatappv1.ToolCallEntity{}),
 		reg.RegisterTimelineEntity(TimelineEntityToolResult, &chatappv1.ToolResultEntity{}),
 	} {
@@ -86,7 +91,7 @@ func (p *ToolCallPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp
 // ProjectUI forwards canonical tool backend events as canonical UI events.
 func (p *ToolCallPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
 	switch ev.Name {
-	case EventToolCallStarted, EventToolArgumentsPatch, EventToolCallRequested, EventToolExecutionStarted, EventToolResultReady, EventToolCallFinished:
+	case EventToolCallStarted, EventToolArgumentsPatch, EventToolCallRequested, EventToolExecutionStarted, EventToolResultReady, EventToolCallFinished, EventToolCallProgress:
 		if ev.Payload == nil {
 			return nil, true, fmt.Errorf("tool payload must be proto message, got %T", ev.Payload)
 		}
@@ -105,11 +110,31 @@ func (p *ToolCallPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Eve
 			return nil, true, fmt.Errorf("unexpected tool call payload %T", ev.Payload)
 		}
 		existing := mergeToolCallFields(currentToolCallEntity(view, payload.ToolCallID), payload)
-		if ev.Name == EventToolCallFinished {
+		switch p := ev.Payload.(type) {
+		case *chatappv1.ChatToolExecutionStarted:
+			if existing.StartedAtMs == 0 {
+				existing.StartedAtMs = p.GetAtMs()
+			}
+			existing.State = "running"
+		case *chatappv1.ChatToolCallFinished:
 			existing.Status = "completed"
 			existing.Executing = false
+			existing.FinishedAtMs = p.GetAtMs()
+			existing.State = ""
 		}
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityToolCall, Id: payload.ToolCallID, Payload: existing}}, true, nil
+	case EventToolCallProgress:
+		payload, ok := ev.Payload.(*chatappv1.ChatToolCallProgress)
+		if !ok || payload == nil || payload.GetToolCallId() == "" {
+			return nil, true, fmt.Errorf("tool progress payload must be %T with a tool call id, got %T", &chatappv1.ChatToolCallProgress{}, ev.Payload)
+		}
+		existing := currentToolCallEntity(view, payload.GetToolCallId())
+		existing.ToolCallId = payload.GetToolCallId()
+		if existing.MessageId == "" {
+			existing.MessageId = payload.GetMessageId()
+		}
+		existing.State = payload.GetState()
+		return []sessionstream.TimelineEntity{{Kind: TimelineEntityToolCall, Id: payload.GetToolCallId(), Payload: existing}}, true, nil
 	case EventToolResultReady:
 		payload, ok := ev.Payload.(*chatappv1.ChatToolResultReady)
 		if !ok || payload == nil {

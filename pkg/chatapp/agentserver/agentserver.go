@@ -427,6 +427,7 @@ func (s *Server) resolve(ctx context.Context, _ *http.Request, info sessions.Inf
 		),
 		RuntimeKey:         p.Name,
 		RuntimeFingerprint: p.Name + ":" + modelRef,
+		Model:              modelRef,
 	}, nil
 }
 

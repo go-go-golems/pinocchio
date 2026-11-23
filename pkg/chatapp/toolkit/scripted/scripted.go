@@ -4,6 +4,8 @@
 //	/tool NAME {json}     call tool NAME with the JSON object as input
 //	/tools N NAME {json}  call tool NAME N times in a row, one per round
 //	/sleep MS text        wait MS milliseconds (observes cancellation), then echo text
+//	/think THOUGHT -- REST stream THOUGHT as thinking in the run's first round, then run REST as the script
+//	                       (without " -- REST": answer "echo: THOUGHT")
 //	anything else         answer "echo: <text>"
 //
 // After a tool result it answers "NAME returned: <result>" (or the error).
@@ -54,6 +56,18 @@ func (f *Engine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, 
 		tail = t.Blocks[len(t.Blocks)-1]
 	}
 	msgIdx, user := personMessage(t)
+	thought := ""
+	if rest, ok := strings.CutPrefix(user, "/think "); ok {
+		thought, user = rest, rest
+		if th, script, ok := strings.Cut(rest, " -- "); ok {
+			thought, user = th, script
+		}
+	}
+	if thought != "" && tail.Kind != turns.BlockKindToolUse {
+		if err := f.think(ctx, thought); err != nil {
+			return t, err
+		}
+	}
 	if cfg, ok, _ := engine.KeyToolConfig.Get(t.Data); ok && cfg.ToolChoice == engine.ToolChoiceNone {
 		if f.FinalError != nil {
 			return t, f.FinalError
@@ -124,6 +138,27 @@ func (f *Engine) say(ctx context.Context, t *turns.Turn, text string) (*turns.Tu
 	turns.AppendBlock(t, turns.NewAssistantTextBlock(text))
 	f.usage(ctx, meta, t, len(words), false)
 	return t, nil
+}
+
+// think streams text as one thinking segment.
+func (f *Engine) think(ctx context.Context, text string) error {
+	meta := gepevents.EventMetadata{ID: uuid.New(), LLMInferenceData: gepevents.LLMInferenceData{Model: "fake"}}
+	corr := gepevents.Correlation{SegmentID: uuid.NewString()}
+	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningSegmentStartedEvent(meta, corr, "scripted"))
+	acc := ""
+	for i, w := range strings.SplitAfter(text, " ") {
+		if f.Delay > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(f.Delay):
+			}
+		}
+		acc += w
+		gepevents.PublishEventToContext(ctx, gepevents.NewReasoningDeltaEventWithSource(meta, corr, "scripted", w, acc, int64(i+1)))
+	}
+	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningSegmentFinishedEventWithSource(meta, corr, "scripted", text, "stop"))
+	return nil
 }
 
 func (f *Engine) callTool(ctx context.Context, t *turns.Turn, name string, input map[string]any) (*turns.Turn, error) {

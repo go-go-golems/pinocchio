@@ -43,6 +43,9 @@ type ComposedRuntime struct {
 	WrapSink           EventSinkWrapper
 	RuntimeFingerprint string
 	RuntimeKey         string
+	// Model names the model the run uses, for display (ChatRunStarted.model,
+	// the ChatRun entity); "" when the resolver does not say.
+	Model string
 
 	// Loop configures the tool loop: the round limit and an optional final
 	// answer at the limit. nil uses geppetto's default (20 rounds, no final

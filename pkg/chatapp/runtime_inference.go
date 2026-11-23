@@ -24,6 +24,9 @@ func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Com
 	if !ok || payload == nil {
 		return fmt.Errorf("start inference payload must be %T, got %T", &chatappv1.StartInferenceCommand{}, cmd.Payload)
 	}
+	// Every event of the run (and of its tools, which receive this publisher)
+	// gets its time from the server's clock when it is published.
+	pub = Stamped(pub)
 	pending := e.takePendingRequest(strings.TrimSpace(payload.GetRequestId()))
 	prompt := strings.TrimSpace(pending.Prompt)
 	if prompt == "" {
@@ -95,7 +98,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	// replacing prompt). Publishing the start and loading history use a
 	// non-cancellable context so a cancelled run still ends with ChatRunStopped
 	// and its turn is kept.
-	if err := e.publish(publishContext(ctx), sid, pub, EventChatRunStarted, &chatappv1.ChatRunStarted{MessageId: messageID, Prompt: prompt, Correlation: runCorrelationInfo(sid, messageID)}); err != nil {
+	if err := e.publish(publishContext(ctx), sid, pub, EventChatRunStarted, &chatappv1.ChatRunStarted{MessageId: messageID, Prompt: prompt, Model: runtime.Model, Correlation: runCorrelationInfo(sid, messageID)}); err != nil {
 		return
 	}
 

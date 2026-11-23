@@ -56,6 +56,7 @@ message FrontendToolCallRequested {
   ToolExecutionMode mode = 5;
   string status = 6;
   FrontendToolExecutor executor = 7;
+  int64 at_ms = 8;
 }
 
 // FrontendToolResultCommand is submitted by the browser after it executes or rejects a tool call.
@@ -78,6 +79,7 @@ message FrontendToolResultReceived {
   string status = 5;
   string error = 6;
   FrontendToolExecutor executor = 7;
+  int64 at_ms = 8;
 }
 
 // FrontendToolCallEntity is the durable timeline representation of a frontend tool call.
@@ -91,4 +93,7 @@ message FrontendToolCallEntity {
   google.protobuf.Value result = 7;
   string error = 8;
   FrontendToolExecutor executor = 9;
+  // ms since the epoch (server clock)
+  int64 requested_at_ms = 10;
+  int64 finished_at_ms = 11;
 }

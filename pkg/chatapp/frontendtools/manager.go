@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-go-golems/pinocchio/pkg/chatapp"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/google/uuid"
@@ -208,6 +209,7 @@ func (m *Manager) Install(hub *sessionstream.Hub) error {
 }
 
 func (m *Manager) HandleManifest(ctx context.Context, cmd sessionstream.Command, _ *sessionstream.Session, pub sessionstream.EventPublisher) error {
+	pub = chatapp.Stamped(pub) // events carry the server's time (chatapp.Stamped)
 	payload, ok := cmd.Payload.(*toolv1.FrontendToolManifestCommand)
 	if !ok || payload == nil {
 		return fmt.Errorf("frontend tool manifest payload must be %T, got %T", &toolv1.FrontendToolManifestCommand{}, cmd.Payload)
@@ -296,6 +298,7 @@ func (m *Manager) AcceptManifest(ctx context.Context, sid sessionstream.SessionI
 }
 
 func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _ *sessionstream.Session, pub sessionstream.EventPublisher) error {
+	pub = chatapp.Stamped(pub) // events carry the server's time (chatapp.Stamped)
 	if m == nil {
 		return fmt.Errorf("frontend tools manager is nil")
 	}
@@ -400,6 +403,7 @@ type Request struct {
 }
 
 func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, req Request) (*toolv1.FrontendToolResultCommand, error) {
+	pub = chatapp.Stamped(pub) // events carry the server's time (chatapp.Stamped)
 	if m == nil {
 		return nil, fmt.Errorf("frontend tools manager is nil")
 	}

@@ -355,6 +355,7 @@ type FrontendToolCallRequested struct {
 	Mode          ToolExecutionMode      `protobuf:"varint,5,opt,name=mode,proto3,enum=pinocchio.chatapp.frontendtools.v1.ToolExecutionMode" json:"mode,omitempty"`
 	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	Executor      *FrontendToolExecutor  `protobuf:"bytes,7,opt,name=executor,proto3" json:"executor,omitempty"`
+	AtMs          int64                  `protobuf:"varint,8,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -436,6 +437,13 @@ func (x *FrontendToolCallRequested) GetExecutor() *FrontendToolExecutor {
 		return x.Executor
 	}
 	return nil
+}
+
+func (x *FrontendToolCallRequested) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
 }
 
 // FrontendToolResultCommand is submitted by the browser after it executes or rejects a tool call.
@@ -534,6 +542,7 @@ type FrontendToolResultReceived struct {
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	Error         string                 `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
 	Executor      *FrontendToolExecutor  `protobuf:"bytes,7,opt,name=executor,proto3" json:"executor,omitempty"`
+	AtMs          int64                  `protobuf:"varint,8,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -617,6 +626,13 @@ func (x *FrontendToolResultReceived) GetExecutor() *FrontendToolExecutor {
 	return nil
 }
 
+func (x *FrontendToolResultReceived) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 // FrontendToolCallEntity is the durable timeline representation of a frontend tool call.
 type FrontendToolCallEntity struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -629,8 +645,11 @@ type FrontendToolCallEntity struct {
 	Result          *structpb.Value        `protobuf:"bytes,7,opt,name=result,proto3" json:"result,omitempty"`
 	Error           string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
 	Executor        *FrontendToolExecutor  `protobuf:"bytes,9,opt,name=executor,proto3" json:"executor,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// ms since the epoch (server clock)
+	RequestedAtMs int64 `protobuf:"varint,10,opt,name=requested_at_ms,json=requestedAtMs,proto3" json:"requested_at_ms,omitempty"`
+	FinishedAtMs  int64 `protobuf:"varint,11,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *FrontendToolCallEntity) Reset() {
@@ -726,6 +745,20 @@ func (x *FrontendToolCallEntity) GetExecutor() *FrontendToolExecutor {
 	return nil
 }
 
+func (x *FrontendToolCallEntity) GetRequestedAtMs() int64 {
+	if x != nil {
+		return x.RequestedAtMs
+	}
+	return 0
+}
+
+func (x *FrontendToolCallEntity) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
 var File_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto protoreflect.FileDescriptor
 
 const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
@@ -749,7 +782,7 @@ const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\x1bFrontendToolManifestUpdated\x12P\n" +
 	"\x05tools\x18\x01 \x03(\v2:.pinocchio.chatapp.frontendtools.v1.FrontendToolDescriptorR\x05tools\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x04R\brevision\x12T\n" +
-	"\bexecutor\x18\x03 \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xe1\x02\n" +
+	"\bexecutor\x18\x03 \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xf6\x02\n" +
 	"\x19FrontendToolCallRequested\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -759,7 +792,8 @@ const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\x05input\x18\x04 \x01(\v2\x17.google.protobuf.StructR\x05input\x12I\n" +
 	"\x04mode\x18\x05 \x01(\x0e25.pinocchio.chatapp.frontendtools.v1.ToolExecutionModeR\x04mode\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12T\n" +
-	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\x8e\x02\n" +
+	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\x12\x13\n" +
+	"\x05at_ms\x18\b \x01(\x03R\x04atMs\"\x8e\x02\n" +
 	"\x19FrontendToolResultCommand\x12 \n" +
 	"\ftool_call_id\x18\x01 \x01(\tR\n" +
 	"toolCallId\x12\x1b\n" +
@@ -767,7 +801,7 @@ const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\x06result\x18\x03 \x01(\v2\x16.google.protobuf.ValueR\x06result\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x12T\n" +
-	"\bexecutor\x18\x06 \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xae\x02\n" +
+	"\bexecutor\x18\x06 \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xc3\x02\n" +
 	"\x1aFrontendToolResultReceived\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -777,7 +811,8 @@ const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\x06result\x18\x04 \x01(\v2\x16.google.protobuf.ValueR\x06result\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x06 \x01(\tR\x05error\x12T\n" +
-	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xb1\x03\n" +
+	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\x12\x13\n" +
+	"\x05at_ms\x18\b \x01(\x03R\x04atMs\"\xff\x03\n" +
 	"\x16FrontendToolCallEntity\x12 \n" +
 	"\ftool_call_id\x18\x01 \x01(\tR\n" +
 	"toolCallId\x12\x1b\n" +
@@ -788,7 +823,10 @@ const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\x05input\x18\x06 \x01(\v2\x17.google.protobuf.StructR\x05input\x12.\n" +
 	"\x06result\x18\a \x01(\v2\x16.google.protobuf.ValueR\x06result\x12\x14\n" +
 	"\x05error\x18\b \x01(\tR\x05error\x12T\n" +
-	"\bexecutor\x18\t \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor*\xa8\x01\n" +
+	"\bexecutor\x18\t \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\x12&\n" +
+	"\x0frequested_at_ms\x18\n" +
+	" \x01(\x03R\rrequestedAtMs\x12$\n" +
+	"\x0efinished_at_ms\x18\v \x01(\x03R\ffinishedAtMs*\xa8\x01\n" +
 	"\x11ToolExecutionMode\x12#\n" +
 	"\x1fTOOL_EXECUTION_MODE_UNSPECIFIED\x10\x00\x12%\n" +
 	"!TOOL_EXECUTION_MODE_FRONTEND_AUTO\x10\x01\x12&\n" +

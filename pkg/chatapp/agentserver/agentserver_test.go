@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -346,4 +347,70 @@ func TestToolsThePersonApprovesGetThePersonTimeout(t *testing.T) {
 	require.Equal(t, DefaultPersonTimeout, limit(ctx, geptools.ToolCall{Name: "page_approve"}))
 	require.Equal(t, 2*time.Minute, limit(ctx, geptools.ToolCall{Name: "eval"}))
 	require.Equal(t, 2*time.Minute, limit(ctx, geptools.ToolCall{Name: "noop"}), "in-process tools")
+}
+
+// msOf reads a protojson int64 (a string) or a number.
+func msOf(v any) int64 {
+	switch x := v.(type) {
+	case string:
+		n, _ := strconv.ParseInt(x, 10, 64)
+		return n
+	case float64:
+		return int64(x)
+	}
+	return 0
+}
+
+func entityOf(t *testing.T, got httpapi.SessionResponse, kind string, match func(map[string]any) bool) map[string]any {
+	t.Helper()
+	for _, e := range got.Snapshot.Entities {
+		if p, ok := e.Payload.(map[string]any); ok && e.Kind == kind && (match == nil || match(p)) {
+			return p
+		}
+	}
+	require.Failf(t, "no entity", "kind %s in %d entities", kind, len(got.Snapshot.Entities))
+	return nil
+}
+
+// An answer is a record: the snapshot alone says which model answered, when,
+// with how many tokens and model calls, and when each part started and ended.
+func TestAnAnswerIsARecordInTheSnapshot(t *testing.T) {
+	base := start(t, writePresets(t), t.TempDir()).URL
+	status, out := call(t, http.MethodPost, base+"/v1/sessions", `{"labels":{"preset":"plain"}}`)
+	require.Equal(t, http.StatusCreated, status, string(out))
+	var created httpapi.SessionResponse
+	require.NoError(t, json.Unmarshal(out, &created))
+	before := time.Now().UnixMilli()
+	status, out = call(t, http.MethodPost, base+"/v1/sessions/"+created.SessionID+"/messages", `{"prompt":"/think plan the call -- /tool noop {}"}`)
+	require.Equal(t, http.StatusAccepted, status, string(out))
+	var sent struct {
+		MessageID string `json:"messageId"`
+	}
+	require.NoError(t, json.Unmarshal(out, &sent))
+	got := waitIdle(t, base, created.SessionID)
+	after := time.Now().UnixMilli()
+
+	run := entityOf(t, got, "ChatRun", func(p map[string]any) bool { return p["messageId"] == sent.MessageID })
+	require.Equal(t, "finished", run["status"])
+	require.Equal(t, scripted.Model.Ref, run["model"])
+	started, finished := msOf(run["startedAtMs"]), msOf(run["finishedAtMs"])
+	require.True(t, before <= started && started <= finished && finished <= after, "run times %d..%d within %d..%d", started, finished, before, after)
+	require.EqualValues(t, 2, run["providerCalls"], "the tool call's round and the answer's round")
+	usage, _ := run["usage"].(map[string]any)
+	require.NotNil(t, usage, "usage summed over the run")
+	require.Greater(t, msOf(usage["inputTokens"]), int64(0))
+
+	q := entityOf(t, got, "ChatMessage", func(p map[string]any) bool { return p["role"] == "user" })
+	require.Equal(t, sent.MessageID+"-user", q["messageId"])
+	require.Greater(t, msOf(q["startedAtMs"]), int64(0))
+	a := entityOf(t, got, "ChatMessage", func(p map[string]any) bool { return p["role"] == "assistant" })
+	require.Equal(t, sent.MessageID, a["parentMessageId"])
+	require.True(t, msOf(a["startedAtMs"]) >= started && msOf(a["finishedAtMs"]) >= msOf(a["startedAtMs"]), "text segment times")
+	th := entityOf(t, got, "ChatMessage", func(p map[string]any) bool { return p["role"] == "thinking" })
+	require.Equal(t, "plan the call", th["text"])
+	require.Equal(t, sent.MessageID, th["parentMessageId"])
+	require.True(t, msOf(th["startedAtMs"]) >= started && msOf(th["finishedAtMs"]) >= msOf(th["startedAtMs"]), "thinking times: %v", th)
+	tool := entityOf(t, got, "ChatToolCall", nil)
+	require.Equal(t, sent.MessageID, tool["messageId"])
+	require.True(t, msOf(tool["startedAtMs"]) > 0 && msOf(tool["finishedAtMs"]) >= msOf(tool["startedAtMs"]), "tool call times: %v", tool)
 }

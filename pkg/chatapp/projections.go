@@ -46,17 +46,32 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 			}
 		}
 		entity.Text = entity.Content
+		entity.StartedAtMs, entity.FinishedAtMs = payload.GetAtMs(), payload.GetAtMs()
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	case *chatappv1.ChatRunStarted:
 		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) {
 			r.Status, r.Prompt = "running", payload.GetPrompt()
+			r.Model, r.StartedAtMs = payload.GetModel(), payload.GetStartedAtMs()
 		}), nil
 	case *chatappv1.ChatRunFinished:
 		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) {
 			r.Status, r.Truncated, r.Reason = "finished", payload.GetTruncated(), payload.GetReason()
+			r.FinishedAtMs = payload.GetFinishedAtMs()
 		}), nil
 	case *chatappv1.ChatRunStopped:
-		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) { r.Status = "stopped" }), nil
+		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) {
+			r.Status, r.FinishedAtMs = "stopped", payload.GetFinishedAtMs()
+		}), nil
+	case *chatappv1.ChatProviderCallFinished:
+		// A run's usage is the sum of its provider calls; a call without a run
+		// (published by an older sink) changes nothing.
+		if strings.TrimSpace(payload.GetMessageId()) == "" {
+			return nil, nil
+		}
+		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) {
+			r.Usage = AddUsage(r.GetUsage(), payload.GetUsage())
+			r.ProviderCalls++
+		}), nil
 	case *chatappv1.ChatRunFailed:
 		messageID := strings.TrimSpace(payload.GetMessageId())
 		if messageID == "" {
@@ -64,17 +79,20 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		}
 		run := runEntity(view, messageID, func(r *chatappv1.ChatRunEntity) {
 			r.Status, r.Code, r.Error = "failed", payload.GetCode(), payload.GetError()
+			r.FinishedAtMs = payload.GetFinishedAtMs()
 		})
 		content := firstNonEmpty(payload.GetError(), "Chat run failed")
 		entity := &chatappv1.ChatMessageEntity{
-			MessageId:   messageID,
-			Role:        "error",
-			Content:     content,
-			Text:        content,
-			Status:      firstNonEmpty(payload.GetStatus(), "failed"),
-			Streaming:   false,
-			Final:       true,
-			Correlation: payload.GetCorrelation(),
+			MessageId:    messageID,
+			Role:         "error",
+			Content:      content,
+			Text:         content,
+			Status:       firstNonEmpty(payload.GetStatus(), "failed"),
+			Streaming:    false,
+			Final:        true,
+			Correlation:  payload.GetCorrelation(),
+			StartedAtMs:  payload.GetFinishedAtMs(),
+			FinishedAtMs: payload.GetFinishedAtMs(),
 		}
 		return append(run, sessionstream.TimelineEntity{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}), nil
 	case *chatappv1.ChatTextSegmentStarted:
@@ -94,6 +112,7 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Text = content
 		entity.Status = firstNonEmpty(payload.GetStatus(), "streaming")
 		entity.Streaming = payload.GetStreaming()
+		StartAt(entity, payload.GetAtMs())
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
@@ -115,6 +134,7 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Status = firstNonEmpty(payload.GetStatus(), "streaming")
 		entity.Streaming = !payload.GetFinal()
 		entity.Final = payload.GetFinal()
+		StartAt(entity, payload.GetAtMs())
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
@@ -136,11 +156,33 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Status = firstNonEmpty(payload.GetStatus(), "finished")
 		entity.Streaming = payload.GetStreaming()
 		entity.Final = payload.GetFinal()
+		StartAt(entity, payload.GetAtMs())
+		entity.FinishedAtMs = payload.GetAtMs()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	default:
 		return nil, nil
+	}
+}
+
+// StartAt sets a message entity's start time once: from the first event of
+// the segment that carries a time (the segment's start, or its first patch
+// when the start made no entity).
+func StartAt(e *chatappv1.ChatMessageEntity, atMs int64) {
+	if e != nil && e.GetStartedAtMs() == 0 && atMs != 0 {
+		e.StartedAtMs = atMs
+	}
+}
+
+// AddUsage returns a + b (nil counts as zero).
+func AddUsage(a, b *chatappv1.UsageInfo) *chatappv1.UsageInfo {
+	return &chatappv1.UsageInfo{
+		InputTokens:              a.GetInputTokens() + b.GetInputTokens(),
+		OutputTokens:             a.GetOutputTokens() + b.GetOutputTokens(),
+		CachedTokens:             a.GetCachedTokens() + b.GetCachedTokens(),
+		CacheCreationInputTokens: a.GetCacheCreationInputTokens() + b.GetCacheCreationInputTokens(),
+		CacheReadInputTokens:     a.GetCacheReadInputTokens() + b.GetCacheReadInputTokens(),
 	}
 }
 

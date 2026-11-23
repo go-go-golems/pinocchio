@@ -67,7 +67,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		if s.engine.usageObserver != nil && usage != nil {
 			s.engine.usageObserver(s.publishContext(), s.sessionID, usage)
 		}
-		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatProviderCallFinished, &chatappv1.ChatProviderCallFinished{StopReason: ev.StopReason, FinishClass: ev.FinishClass, Usage: usage, DurationMs: ev.DurationMs, HasToolCalls: ev.HasToolCalls, Correlation: correlationInfoFromEvent(ev)})
+		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatProviderCallFinished, &chatappv1.ChatProviderCallFinished{MessageId: s.messageID, StopReason: ev.StopReason, FinishClass: ev.FinishClass, Usage: usage, DurationMs: ev.DurationMs, HasToolCalls: ev.HasToolCalls, Correlation: correlationInfoFromEvent(ev)})
 	case *gepevents.EventTextSegmentStarted:
 		corr := ev.Correlation()
 		textMessageID, _ := s.textSegmentIDForCorrelation(corr)

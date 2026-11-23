@@ -457,10 +457,14 @@ func (x *CorrelationInfo) GetToolCallId() string {
 }
 
 type ChatRunStarted struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Prompt        string                 `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Correlation   *CorrelationInfo       `protobuf:"bytes,3,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Prompt      string                 `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Correlation *CorrelationInfo       `protobuf:"bytes,3,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	// ms since the epoch (server clock)
+	StartedAtMs int64 `protobuf:"varint,4,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	// the model the run uses (ComposedRuntime.Model), for display
+	Model         string `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -516,6 +520,20 @@ func (x *ChatRunStarted) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatRunStarted) GetStartedAtMs() int64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *ChatRunStarted) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
 type ChatRunFinished struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -528,6 +546,7 @@ type ChatRunFinished struct {
 	Truncated bool `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
 	// reason says why a truncated run ended, e.g. "max_rounds".
 	Reason        string `protobuf:"bytes,7,opt,name=reason,proto3" json:"reason,omitempty"`
+	FinishedAtMs  int64  `protobuf:"varint,8,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -611,12 +630,20 @@ func (x *ChatRunFinished) GetReason() string {
 	return ""
 }
 
+func (x *ChatRunFinished) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
 type ChatRunStopped struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
 	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	Correlation   *CorrelationInfo       `protobuf:"bytes,4,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	FinishedAtMs  int64                  `protobuf:"varint,5,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -679,6 +706,13 @@ func (x *ChatRunStopped) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatRunStopped) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
 type ChatRunFailed struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -689,6 +723,7 @@ type ChatRunFailed struct {
 	// authentication_error, rate_limited, prompt_too_large, upstream_error, or a
 	// code supplied by the caller's error (an error with a Code() string method).
 	Code          string `protobuf:"bytes,5,opt,name=code,proto3" json:"code,omitempty"`
+	FinishedAtMs  int64  `protobuf:"varint,6,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -756,6 +791,13 @@ func (x *ChatRunFailed) GetCode() string {
 		return x.Code
 	}
 	return ""
+}
+
+func (x *ChatRunFailed) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
 }
 
 type ChatProviderCallStarted struct {
@@ -863,13 +905,15 @@ func (x *ChatProviderCallMetadataUpdated) GetCorrelation() *CorrelationInfo {
 }
 
 type ChatProviderCallFinished struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	StopReason    string                 `protobuf:"bytes,1,opt,name=stop_reason,json=stopReason,proto3" json:"stop_reason,omitempty"`
-	FinishClass   string                 `protobuf:"bytes,2,opt,name=finish_class,json=finishClass,proto3" json:"finish_class,omitempty"`
-	Usage         *UsageInfo             `protobuf:"bytes,3,opt,name=usage,proto3" json:"usage,omitempty"`
-	DurationMs    *int64                 `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3,oneof" json:"duration_ms,omitempty"`
-	HasToolCalls  bool                   `protobuf:"varint,5,opt,name=has_tool_calls,json=hasToolCalls,proto3" json:"has_tool_calls,omitempty"`
-	Correlation   *CorrelationInfo       `protobuf:"bytes,6,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	StopReason   string                 `protobuf:"bytes,1,opt,name=stop_reason,json=stopReason,proto3" json:"stop_reason,omitempty"`
+	FinishClass  string                 `protobuf:"bytes,2,opt,name=finish_class,json=finishClass,proto3" json:"finish_class,omitempty"`
+	Usage        *UsageInfo             `protobuf:"bytes,3,opt,name=usage,proto3" json:"usage,omitempty"`
+	DurationMs   *int64                 `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3,oneof" json:"duration_ms,omitempty"`
+	HasToolCalls bool                   `protobuf:"varint,5,opt,name=has_tool_calls,json=hasToolCalls,proto3" json:"has_tool_calls,omitempty"`
+	Correlation  *CorrelationInfo       `protobuf:"bytes,6,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	// the run (message id) the call belongs to
+	MessageId     string `protobuf:"bytes,7,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -946,6 +990,13 @@ func (x *ChatProviderCallFinished) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatProviderCallFinished) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
 type ChatTextSegmentStarted struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -954,6 +1005,7 @@ type ChatTextSegmentStarted struct {
 	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	Streaming     bool                   `protobuf:"varint,5,opt,name=streaming,proto3" json:"streaming,omitempty"`
 	Correlation   *CorrelationInfo       `protobuf:"bytes,6,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs          int64                  `protobuf:"varint,7,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1030,6 +1082,13 @@ func (x *ChatTextSegmentStarted) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatTextSegmentStarted) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 type ChatTextPatch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -1044,6 +1103,7 @@ type ChatTextPatch struct {
 	FinishReason  string                 `protobuf:"bytes,10,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
 	Prompt        string                 `protobuf:"bytes,11,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	Correlation   *CorrelationInfo       `protobuf:"bytes,12,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs          int64                  `protobuf:"varint,13,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1162,6 +1222,13 @@ func (x *ChatTextPatch) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatTextPatch) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 // ChatTextDelta is the compact, ephemeral UI representation of a
 // ChatTextPatch. It is not a canonical backend event or timeline entity.
 type ChatTextDelta struct {
@@ -1244,6 +1311,7 @@ type ChatTextSegmentFinished struct {
 	Final         bool                   `protobuf:"varint,8,opt,name=final,proto3" json:"final,omitempty"`
 	FinishReason  string                 `protobuf:"bytes,9,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
 	Correlation   *CorrelationInfo       `protobuf:"bytes,10,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs          int64                  `protobuf:"varint,11,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1348,6 +1416,13 @@ func (x *ChatTextSegmentFinished) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatTextSegmentFinished) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 // ChatReasoningDelta is the compact, ephemeral UI representation of a
 // ChatReasoningPatch. It is not a canonical backend event or timeline entity.
 type ChatReasoningDelta struct {
@@ -1435,6 +1510,7 @@ type ChatReasoningSegmentStarted struct {
 	Streaming       bool                   `protobuf:"varint,5,opt,name=streaming,proto3" json:"streaming,omitempty"`
 	Source          string                 `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
 	Correlation     *CorrelationInfo       `protobuf:"bytes,7,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs            int64                  `protobuf:"varint,8,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1518,6 +1594,13 @@ func (x *ChatReasoningSegmentStarted) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatReasoningSegmentStarted) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 type ChatReasoningPatch struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -1533,6 +1616,7 @@ type ChatReasoningPatch struct {
 	Source          string                 `protobuf:"bytes,11,opt,name=source,proto3" json:"source,omitempty"`
 	FinishReason    string                 `protobuf:"bytes,12,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
 	Correlation     *CorrelationInfo       `protobuf:"bytes,13,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs            int64                  `protobuf:"varint,14,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1658,6 +1742,13 @@ func (x *ChatReasoningPatch) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatReasoningPatch) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 type ChatReasoningSegmentFinished struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -1670,6 +1761,7 @@ type ChatReasoningSegmentFinished struct {
 	Source          string                 `protobuf:"bytes,8,opt,name=source,proto3" json:"source,omitempty"`
 	FinishReason    string                 `protobuf:"bytes,9,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
 	Correlation     *CorrelationInfo       `protobuf:"bytes,10,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs            int64                  `protobuf:"varint,11,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1772,6 +1864,13 @@ func (x *ChatReasoningSegmentFinished) GetCorrelation() *CorrelationInfo {
 		return x.Correlation
 	}
 	return nil
+}
+
+func (x *ChatReasoningSegmentFinished) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
 }
 
 type ChatToolCallStarted struct {
@@ -2177,6 +2276,7 @@ type ChatToolExecutionStarted struct {
 	Executing     bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
 	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	Correlation   *CorrelationInfo       `protobuf:"bytes,7,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs          int64                  `protobuf:"varint,8,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2260,6 +2360,13 @@ func (x *ChatToolExecutionStarted) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatToolExecutionStarted) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 type ChatToolResultReady struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -2268,6 +2375,7 @@ type ChatToolResultReady struct {
 	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	Correlation   *CorrelationInfo       `protobuf:"bytes,6,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs          int64                  `protobuf:"varint,7,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2344,6 +2452,13 @@ func (x *ChatToolResultReady) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ChatToolResultReady) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 type ChatToolCallFinished struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -2351,6 +2466,7 @@ type ChatToolCallFinished struct {
 	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
 	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	Correlation   *CorrelationInfo       `protobuf:"bytes,5,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	AtMs          int64                  `protobuf:"varint,6,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2420,22 +2536,111 @@ func (x *ChatToolCallFinished) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
-type ChatUserMessageAccepted struct {
+func (x *ChatToolCallFinished) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
+// ChatToolCallProgress says what an executing tool call is doing: that it
+// waits for a person ("awaiting-person", with that limit) or runs again
+// ("running"). Published through toolexec's deadline middleware
+// (toolexec.AwaitPerson).
+type ChatToolCallProgress struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Role          string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
-	Prompt        string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Text          string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
-	Content       string                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	Attachments   []*ChatAttachment      `protobuf:"bytes,7,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	LimitMs       int64                  `protobuf:"varint,4,opt,name=limit_ms,json=limitMs,proto3" json:"limit_ms,omitempty"`
+	AtMs          int64                  `protobuf:"varint,5,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChatToolCallProgress) Reset() {
+	*x = ChatToolCallProgress{}
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatToolCallProgress) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatToolCallProgress) ProtoMessage() {}
+
+func (x *ChatToolCallProgress) ProtoReflect() protoreflect.Message {
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatToolCallProgress.ProtoReflect.Descriptor instead.
+func (*ChatToolCallProgress) Descriptor() ([]byte, []int) {
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ChatToolCallProgress) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *ChatToolCallProgress) GetToolCallId() string {
+	if x != nil {
+		return x.ToolCallId
+	}
+	return ""
+}
+
+func (x *ChatToolCallProgress) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *ChatToolCallProgress) GetLimitMs() int64 {
+	if x != nil {
+		return x.LimitMs
+	}
+	return 0
+}
+
+func (x *ChatToolCallProgress) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
+type ChatUserMessageAccepted struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Role        string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	Prompt      string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Text        string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
+	Content     string                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
+	Status      string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	Attachments []*ChatAttachment      `protobuf:"bytes,7,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	// when the server accepted the message (ms since the epoch, server clock)
+	AtMs          int64 `protobuf:"varint,8,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChatUserMessageAccepted) Reset() {
 	*x = ChatUserMessageAccepted{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2447,7 +2652,7 @@ func (x *ChatUserMessageAccepted) String() string {
 func (*ChatUserMessageAccepted) ProtoMessage() {}
 
 func (x *ChatUserMessageAccepted) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2460,7 +2665,7 @@ func (x *ChatUserMessageAccepted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatUserMessageAccepted.ProtoReflect.Descriptor instead.
 func (*ChatUserMessageAccepted) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{27}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ChatUserMessageAccepted) GetMessageId() string {
@@ -2512,6 +2717,13 @@ func (x *ChatUserMessageAccepted) GetAttachments() []*ChatAttachment {
 	return nil
 }
 
+func (x *ChatUserMessageAccepted) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 // ChatRunEntity is a run's lifecycle in the timeline, so a snapshot holds
 // every run's outcome (a client that missed the terminal event, or a run
 // stopped before any output, is still visible). Its id is the run's message
@@ -2526,15 +2738,23 @@ type ChatRunEntity struct {
 	Code  string `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
 	Error string `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
 	// finished at the round limit with a final answer (ChatRunFinished)
-	Truncated     bool   `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
-	Reason        string `protobuf:"bytes,7,opt,name=reason,proto3" json:"reason,omitempty"`
+	Truncated bool   `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	Reason    string `protobuf:"bytes,7,opt,name=reason,proto3" json:"reason,omitempty"`
+	// the run's model (ChatRunStarted.model)
+	Model string `protobuf:"bytes,8,opt,name=model,proto3" json:"model,omitempty"`
+	// ms since the epoch (server clock); finished_at_ms is 0 while the run runs
+	StartedAtMs  int64 `protobuf:"varint,9,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	FinishedAtMs int64 `protobuf:"varint,10,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	// summed over the run's provider calls (ChatProviderCallFinished.message_id)
+	Usage         *UsageInfo `protobuf:"bytes,11,opt,name=usage,proto3" json:"usage,omitempty"`
+	ProviderCalls int32      `protobuf:"varint,12,opt,name=provider_calls,json=providerCalls,proto3" json:"provider_calls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChatRunEntity) Reset() {
 	*x = ChatRunEntity{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2546,7 +2766,7 @@ func (x *ChatRunEntity) String() string {
 func (*ChatRunEntity) ProtoMessage() {}
 
 func (x *ChatRunEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2559,7 +2779,7 @@ func (x *ChatRunEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatRunEntity.ProtoReflect.Descriptor instead.
 func (*ChatRunEntity) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{28}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ChatRunEntity) GetMessageId() string {
@@ -2611,6 +2831,41 @@ func (x *ChatRunEntity) GetReason() string {
 	return ""
 }
 
+func (x *ChatRunEntity) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *ChatRunEntity) GetStartedAtMs() int64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *ChatRunEntity) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+func (x *ChatRunEntity) GetUsage() *UsageInfo {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+func (x *ChatRunEntity) GetProviderCalls() int32 {
+	if x != nil {
+		return x.ProviderCalls
+	}
+	return 0
+}
+
 type ChatMessageEntity struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -2627,13 +2882,16 @@ type ChatMessageEntity struct {
 	Final           bool                   `protobuf:"varint,12,opt,name=final,proto3" json:"final,omitempty"`
 	Correlation     *CorrelationInfo       `protobuf:"bytes,13,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	Attachments     []*ChatAttachment      `protobuf:"bytes,14,rep,name=attachments,proto3" json:"attachments,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// ms since the epoch (server clock): the segment's first and last event; for a user message, when it was accepted
+	StartedAtMs   int64 `protobuf:"varint,15,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	FinishedAtMs  int64 `protobuf:"varint,16,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChatMessageEntity) Reset() {
 	*x = ChatMessageEntity{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2645,7 +2903,7 @@ func (x *ChatMessageEntity) String() string {
 func (*ChatMessageEntity) ProtoMessage() {}
 
 func (x *ChatMessageEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2658,7 +2916,7 @@ func (x *ChatMessageEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMessageEntity.ProtoReflect.Descriptor instead.
 func (*ChatMessageEntity) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{29}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ChatMessageEntity) GetMessageId() string {
@@ -2759,6 +3017,20 @@ func (x *ChatMessageEntity) GetAttachments() []*ChatAttachment {
 	return nil
 }
 
+func (x *ChatMessageEntity) GetStartedAtMs() int64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *ChatMessageEntity) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
 type AgentModePreviewUpdate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -2772,7 +3044,7 @@ type AgentModePreviewUpdate struct {
 
 func (x *AgentModePreviewUpdate) Reset() {
 	*x = AgentModePreviewUpdate{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2784,7 +3056,7 @@ func (x *AgentModePreviewUpdate) String() string {
 func (*AgentModePreviewUpdate) ProtoMessage() {}
 
 func (x *AgentModePreviewUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2797,7 +3069,7 @@ func (x *AgentModePreviewUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModePreviewUpdate.ProtoReflect.Descriptor instead.
 func (*AgentModePreviewUpdate) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{30}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *AgentModePreviewUpdate) GetMessageId() string {
@@ -2849,7 +3121,7 @@ type AgentModeCommittedUpdate struct {
 
 func (x *AgentModeCommittedUpdate) Reset() {
 	*x = AgentModeCommittedUpdate{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[31]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2861,7 +3133,7 @@ func (x *AgentModeCommittedUpdate) String() string {
 func (*AgentModeCommittedUpdate) ProtoMessage() {}
 
 func (x *AgentModeCommittedUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[31]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2874,7 +3146,7 @@ func (x *AgentModeCommittedUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModeCommittedUpdate.ProtoReflect.Descriptor instead.
 func (*AgentModeCommittedUpdate) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{31}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *AgentModeCommittedUpdate) GetMessageId() string {
@@ -2928,7 +3200,7 @@ type AgentModePreviewCleared struct {
 
 func (x *AgentModePreviewCleared) Reset() {
 	*x = AgentModePreviewCleared{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[32]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2940,7 +3212,7 @@ func (x *AgentModePreviewCleared) String() string {
 func (*AgentModePreviewCleared) ProtoMessage() {}
 
 func (x *AgentModePreviewCleared) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[32]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2953,7 +3225,7 @@ func (x *AgentModePreviewCleared) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModePreviewCleared.ProtoReflect.Descriptor instead.
 func (*AgentModePreviewCleared) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{32}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *AgentModePreviewCleared) GetMessageId() string {
@@ -2977,7 +3249,7 @@ type AgentModeEntity struct {
 
 func (x *AgentModeEntity) Reset() {
 	*x = AgentModeEntity{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[33]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2989,7 +3261,7 @@ func (x *AgentModeEntity) String() string {
 func (*AgentModeEntity) ProtoMessage() {}
 
 func (x *AgentModeEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[33]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3002,7 +3274,7 @@ func (x *AgentModeEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModeEntity.ProtoReflect.Descriptor instead.
 func (*AgentModeEntity) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{33}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AgentModeEntity) GetMessageId() string {
@@ -3048,21 +3320,26 @@ func (x *AgentModeEntity) GetPreview() bool {
 }
 
 type ToolCallEntity struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Input         string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
-	Executing     bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	Correlation   *CorrelationInfo       `protobuf:"bytes,7,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId  string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName    string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Input       string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
+	Executing   bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
+	Status      string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	Correlation *CorrelationInfo       `protobuf:"bytes,7,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	// ms since the epoch (server clock): execution start and end
+	StartedAtMs  int64 `protobuf:"varint,8,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	FinishedAtMs int64 `protobuf:"varint,9,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	// what the call is doing while it executes: "running" or "awaiting-person" (ChatToolCallProgress)
+	State         string `protobuf:"bytes,10,opt,name=state,proto3" json:"state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolCallEntity) Reset() {
 	*x = ToolCallEntity{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[34]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3074,7 +3351,7 @@ func (x *ToolCallEntity) String() string {
 func (*ToolCallEntity) ProtoMessage() {}
 
 func (x *ToolCallEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[34]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3087,7 +3364,7 @@ func (x *ToolCallEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolCallEntity.ProtoReflect.Descriptor instead.
 func (*ToolCallEntity) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{34}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ToolCallEntity) GetMessageId() string {
@@ -3139,6 +3416,27 @@ func (x *ToolCallEntity) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
+func (x *ToolCallEntity) GetStartedAtMs() int64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *ToolCallEntity) GetFinishedAtMs() int64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+func (x *ToolCallEntity) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 type ToolResultEntity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -3153,7 +3451,7 @@ type ToolResultEntity struct {
 
 func (x *ToolResultEntity) Reset() {
 	*x = ToolResultEntity{}
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[35]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3165,7 +3463,7 @@ func (x *ToolResultEntity) String() string {
 func (*ToolResultEntity) ProtoMessage() {}
 
 func (x *ToolResultEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[35]
+	mi := &file_pinocchio_chatapp_v1_chat_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3178,7 +3476,7 @@ func (x *ToolResultEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolResultEntity.ProtoReflect.Descriptor instead.
 func (*ToolResultEntity) Descriptor() ([]byte, []int) {
-	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{35}
+	return file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ToolResultEntity) GetMessageId() string {
@@ -3267,12 +3565,14 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\n" +
 	"segment_id\x18\x0f \x01(\tR\tsegmentId\x12 \n" +
 	"\ftool_call_id\x18\x13 \x01(\tR\n" +
-	"toolCallId\"\x90\x01\n" +
+	"toolCallId\"\xca\x01\n" +
 	"\x0eChatRunStarted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12G\n" +
-	"\vcorrelation\x18\x03 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x93\x02\n" +
+	"\vcorrelation\x18\x03 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\"\n" +
+	"\rstarted_at_ms\x18\x04 \x01(\x03R\vstartedAtMs\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\"\xb9\x02\n" +
 	"\x0fChatRunFinished\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
@@ -3282,28 +3582,31 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"durationMs\x88\x01\x01\x12G\n" +
 	"\vcorrelation\x18\x05 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x1c\n" +
 	"\ttruncated\x18\x06 \x01(\bR\ttruncated\x12\x16\n" +
-	"\x06reason\x18\a \x01(\tR\x06reasonB\x0e\n" +
-	"\f_duration_ms\"\xa6\x01\n" +
+	"\x06reason\x18\a \x01(\tR\x06reason\x12$\n" +
+	"\x0efinished_at_ms\x18\b \x01(\x03R\ffinishedAtMsB\x0e\n" +
+	"\f_duration_ms\"\xcc\x01\n" +
 	"\x0eChatRunStopped\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12G\n" +
-	"\vcorrelation\x18\x04 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xb9\x01\n" +
+	"\vcorrelation\x18\x04 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12$\n" +
+	"\x0efinished_at_ms\x18\x05 \x01(\x03R\ffinishedAtMs\"\xdf\x01\n" +
 	"\rChatRunFailed\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12G\n" +
 	"\vcorrelation\x18\x04 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x12\n" +
-	"\x04code\x18\x05 \x01(\tR\x04code\"b\n" +
+	"\x04code\x18\x05 \x01(\tR\x04code\x12$\n" +
+	"\x0efinished_at_ms\x18\x06 \x01(\x03R\ffinishedAtMs\"b\n" +
 	"\x17ChatProviderCallStarted\x12G\n" +
 	"\vcorrelation\x18\x01 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xc2\x01\n" +
 	"\x1fChatProviderCallMetadataUpdated\x12\x1f\n" +
 	"\vstop_reason\x18\x01 \x01(\tR\n" +
 	"stopReason\x125\n" +
 	"\x05usage\x18\x02 \x01(\v2\x1f.pinocchio.chatapp.v1.UsageInfoR\x05usage\x12G\n" +
-	"\vcorrelation\x18\x03 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xba\x02\n" +
+	"\vcorrelation\x18\x03 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xd9\x02\n" +
 	"\x18ChatProviderCallFinished\x12\x1f\n" +
 	"\vstop_reason\x18\x01 \x01(\tR\n" +
 	"stopReason\x12!\n" +
@@ -3312,8 +3615,10 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\vduration_ms\x18\x04 \x01(\x03H\x00R\n" +
 	"durationMs\x88\x01\x01\x12$\n" +
 	"\x0ehas_tool_calls\x18\x05 \x01(\bR\fhasToolCalls\x12G\n" +
-	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelationB\x0e\n" +
-	"\f_duration_ms\"\xe2\x01\n" +
+	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\a \x01(\tR\tmessageIdB\x0e\n" +
+	"\f_duration_ms\"\xf7\x01\n" +
 	"\x16ChatTextSegmentStarted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -3321,7 +3626,8 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1c\n" +
 	"\tstreaming\x18\x05 \x01(\bR\tstreaming\x12G\n" +
-	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x9a\x03\n" +
+	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\a \x01(\x03R\x04atMs\"\xaf\x03\n" +
 	"\rChatTextPatch\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -3336,13 +3642,14 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\rfinish_reason\x18\n" +
 	" \x01(\tR\ffinishReason\x12\x16\n" +
 	"\x06prompt\x18\v \x01(\tR\x06prompt\x12G\n" +
-	"\vcorrelation\x18\f \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x97\x01\n" +
+	"\vcorrelation\x18\f \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\r \x01(\x03R\x04atMs\"\x97\x01\n" +
 	"\rChatTextDelta\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12=\n" +
 	"\x04mode\x18\x03 \x01(\x0e2).pinocchio.chatapp.v1.ChatStreamPatchModeR\x04mode\x12\x14\n" +
-	"\x05final\x18\x04 \x01(\bR\x05final\"\xcc\x02\n" +
+	"\x05final\x18\x04 \x01(\bR\x05final\"\xe1\x02\n" +
 	"\x17ChatTextSegmentFinished\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -3355,14 +3662,15 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x05final\x18\b \x01(\bR\x05final\x12#\n" +
 	"\rfinish_reason\x18\t \x01(\tR\ffinishReason\x12G\n" +
 	"\vcorrelation\x18\n" +
-	" \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xc8\x01\n" +
+	" \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\v \x01(\x03R\x04atMs\"\xc8\x01\n" +
 	"\x12ChatReasoningDelta\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
 	"\x11parent_message_id\x18\x02 \x01(\tR\x0fparentMessageId\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12=\n" +
 	"\x04mode\x18\x04 \x01(\x0e2).pinocchio.chatapp.v1.ChatStreamPatchModeR\x04mode\x12\x14\n" +
-	"\x05final\x18\x05 \x01(\bR\x05final\"\x93\x02\n" +
+	"\x05final\x18\x05 \x01(\bR\x05final\"\xa8\x02\n" +
 	"\x1bChatReasoningSegmentStarted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
@@ -3371,7 +3679,8 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1c\n" +
 	"\tstreaming\x18\x05 \x01(\bR\tstreaming\x12\x16\n" +
 	"\x06source\x18\x06 \x01(\tR\x06source\x12G\n" +
-	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xcb\x03\n" +
+	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\b \x01(\x03R\x04atMs\"\xe0\x03\n" +
 	"\x12ChatReasoningPatch\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
@@ -3387,7 +3696,8 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	" \x01(\bR\x05final\x12\x16\n" +
 	"\x06source\x18\v \x01(\tR\x06source\x12#\n" +
 	"\rfinish_reason\x18\f \x01(\tR\ffinishReason\x12G\n" +
-	"\vcorrelation\x18\r \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xe7\x02\n" +
+	"\vcorrelation\x18\r \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\x0e \x01(\x03R\x04atMs\"\xfc\x02\n" +
 	"\x1cChatReasoningSegmentFinished\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
@@ -3400,7 +3710,8 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x06source\x18\b \x01(\tR\x06source\x12#\n" +
 	"\rfinish_reason\x18\t \x01(\tR\ffinishReason\x12G\n" +
 	"\vcorrelation\x18\n" +
-	" \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x88\x02\n" +
+	" \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\v \x01(\x03R\x04atMs\"\x88\x02\n" +
 	"\x13ChatToolCallStarted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3444,7 +3755,7 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
 	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x8d\x02\n" +
+	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xa2\x02\n" +
 	"\x18ChatToolExecutionStarted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3454,7 +3765,8 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
 	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xec\x01\n" +
+	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\b \x01(\x03R\x04atMs\"\x81\x02\n" +
 	"\x13ChatToolResultReady\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3463,7 +3775,8 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xd5\x01\n" +
+	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\a \x01(\x03R\x04atMs\"\xea\x01\n" +
 	"\x14ChatToolCallFinished\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3471,7 +3784,16 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"toolCallId\x12\x1b\n" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\x05 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xf2\x01\n" +
+	"\vcorrelation\x18\x05 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x13\n" +
+	"\x05at_ms\x18\x06 \x01(\x03R\x04atMs\"\x9d\x01\n" +
+	"\x14ChatToolCallProgress\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
+	"\ftool_call_id\x18\x02 \x01(\tR\n" +
+	"toolCallId\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\x12\x19\n" +
+	"\blimit_ms\x18\x04 \x01(\x03R\alimitMs\x12\x13\n" +
+	"\x05at_ms\x18\x05 \x01(\x03R\x04atMs\"\x87\x02\n" +
 	"\x17ChatUserMessageAccepted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -3480,7 +3802,8 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x04text\x18\x04 \x01(\tR\x04text\x12\x18\n" +
 	"\acontent\x18\x05 \x01(\tR\acontent\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12F\n" +
-	"\vattachments\x18\a \x03(\v2$.pinocchio.chatapp.v1.ChatAttachmentR\vattachments\"\xbe\x01\n" +
+	"\vattachments\x18\a \x03(\v2$.pinocchio.chatapp.v1.ChatAttachmentR\vattachments\x12\x13\n" +
+	"\x05at_ms\x18\b \x01(\x03R\x04atMs\"\xfc\x02\n" +
 	"\rChatRunEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
@@ -3489,7 +3812,13 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x04code\x18\x04 \x01(\tR\x04code\x12\x14\n" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x12\x1c\n" +
 	"\ttruncated\x18\x06 \x01(\bR\ttruncated\x12\x16\n" +
-	"\x06reason\x18\a \x01(\tR\x06reason\"\xe8\x03\n" +
+	"\x06reason\x18\a \x01(\tR\x06reason\x12\x14\n" +
+	"\x05model\x18\b \x01(\tR\x05model\x12\"\n" +
+	"\rstarted_at_ms\x18\t \x01(\x03R\vstartedAtMs\x12$\n" +
+	"\x0efinished_at_ms\x18\n" +
+	" \x01(\x03R\ffinishedAtMs\x125\n" +
+	"\x05usage\x18\v \x01(\v2\x1f.pinocchio.chatapp.v1.UsageInfoR\x05usage\x12%\n" +
+	"\x0eprovider_calls\x18\f \x01(\x05R\rproviderCalls\"\xb2\x04\n" +
 	"\x11ChatMessageEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -3506,7 +3835,9 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\fsegment_type\x18\v \x01(\tR\vsegmentType\x12\x14\n" +
 	"\x05final\x18\f \x01(\bR\x05final\x12G\n" +
 	"\vcorrelation\x18\r \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12F\n" +
-	"\vattachments\x18\x0e \x03(\v2$.pinocchio.chatapp.v1.ChatAttachmentR\vattachments\"\xb5\x01\n" +
+	"\vattachments\x18\x0e \x03(\v2$.pinocchio.chatapp.v1.ChatAttachmentR\vattachments\x12\"\n" +
+	"\rstarted_at_ms\x18\x0f \x01(\x03R\vstartedAtMs\x12$\n" +
+	"\x0efinished_at_ms\x18\x10 \x01(\x03R\ffinishedAtMs\"\xb5\x01\n" +
 	"\x16AgentModePreviewUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12%\n" +
@@ -3533,7 +3864,7 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x04from\x18\x03 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x04 \x01(\tR\x02to\x12\x1a\n" +
 	"\banalysis\x18\x05 \x01(\tR\banalysis\x12\x18\n" +
-	"\apreview\x18\x06 \x01(\bR\apreview\"\x83\x02\n" +
+	"\apreview\x18\x06 \x01(\bR\apreview\"\xe3\x02\n" +
 	"\x0eToolCallEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3543,7 +3874,11 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
 	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xe9\x01\n" +
+	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\"\n" +
+	"\rstarted_at_ms\x18\b \x01(\x03R\vstartedAtMs\x12$\n" +
+	"\x0efinished_at_ms\x18\t \x01(\x03R\ffinishedAtMs\x12\x14\n" +
+	"\x05state\x18\n" +
+	" \x01(\tR\x05state\"\xe9\x01\n" +
 	"\x10ToolResultEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3572,7 +3907,7 @@ func file_pinocchio_chatapp_v1_chat_proto_rawDescGZIP() []byte {
 }
 
 var file_pinocchio_chatapp_v1_chat_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pinocchio_chatapp_v1_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_pinocchio_chatapp_v1_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_pinocchio_chatapp_v1_chat_proto_goTypes = []any{
 	(ChatStreamPatchMode)(0),                // 0: pinocchio.chatapp.v1.ChatStreamPatchMode
 	(*ChatAttachment)(nil),                  // 1: pinocchio.chatapp.v1.ChatAttachment
@@ -3602,19 +3937,20 @@ var file_pinocchio_chatapp_v1_chat_proto_goTypes = []any{
 	(*ChatToolExecutionStarted)(nil),        // 25: pinocchio.chatapp.v1.ChatToolExecutionStarted
 	(*ChatToolResultReady)(nil),             // 26: pinocchio.chatapp.v1.ChatToolResultReady
 	(*ChatToolCallFinished)(nil),            // 27: pinocchio.chatapp.v1.ChatToolCallFinished
-	(*ChatUserMessageAccepted)(nil),         // 28: pinocchio.chatapp.v1.ChatUserMessageAccepted
-	(*ChatRunEntity)(nil),                   // 29: pinocchio.chatapp.v1.ChatRunEntity
-	(*ChatMessageEntity)(nil),               // 30: pinocchio.chatapp.v1.ChatMessageEntity
-	(*AgentModePreviewUpdate)(nil),          // 31: pinocchio.chatapp.v1.AgentModePreviewUpdate
-	(*AgentModeCommittedUpdate)(nil),        // 32: pinocchio.chatapp.v1.AgentModeCommittedUpdate
-	(*AgentModePreviewCleared)(nil),         // 33: pinocchio.chatapp.v1.AgentModePreviewCleared
-	(*AgentModeEntity)(nil),                 // 34: pinocchio.chatapp.v1.AgentModeEntity
-	(*ToolCallEntity)(nil),                  // 35: pinocchio.chatapp.v1.ToolCallEntity
-	(*ToolResultEntity)(nil),                // 36: pinocchio.chatapp.v1.ToolResultEntity
-	nil,                                     // 37: pinocchio.chatapp.v1.ChatAttachment.MetadataEntry
+	(*ChatToolCallProgress)(nil),            // 28: pinocchio.chatapp.v1.ChatToolCallProgress
+	(*ChatUserMessageAccepted)(nil),         // 29: pinocchio.chatapp.v1.ChatUserMessageAccepted
+	(*ChatRunEntity)(nil),                   // 30: pinocchio.chatapp.v1.ChatRunEntity
+	(*ChatMessageEntity)(nil),               // 31: pinocchio.chatapp.v1.ChatMessageEntity
+	(*AgentModePreviewUpdate)(nil),          // 32: pinocchio.chatapp.v1.AgentModePreviewUpdate
+	(*AgentModeCommittedUpdate)(nil),        // 33: pinocchio.chatapp.v1.AgentModeCommittedUpdate
+	(*AgentModePreviewCleared)(nil),         // 34: pinocchio.chatapp.v1.AgentModePreviewCleared
+	(*AgentModeEntity)(nil),                 // 35: pinocchio.chatapp.v1.AgentModeEntity
+	(*ToolCallEntity)(nil),                  // 36: pinocchio.chatapp.v1.ToolCallEntity
+	(*ToolResultEntity)(nil),                // 37: pinocchio.chatapp.v1.ToolResultEntity
+	nil,                                     // 38: pinocchio.chatapp.v1.ChatAttachment.MetadataEntry
 }
 var file_pinocchio_chatapp_v1_chat_proto_depIdxs = []int32{
-	37, // 0: pinocchio.chatapp.v1.ChatAttachment.metadata:type_name -> pinocchio.chatapp.v1.ChatAttachment.MetadataEntry
+	38, // 0: pinocchio.chatapp.v1.ChatAttachment.metadata:type_name -> pinocchio.chatapp.v1.ChatAttachment.MetadataEntry
 	1,  // 1: pinocchio.chatapp.v1.StartInferenceCommand.attachments:type_name -> pinocchio.chatapp.v1.ChatAttachment
 	5,  // 2: pinocchio.chatapp.v1.ChatRunStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
 	5,  // 3: pinocchio.chatapp.v1.ChatRunFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
@@ -3644,15 +3980,16 @@ var file_pinocchio_chatapp_v1_chat_proto_depIdxs = []int32{
 	5,  // 27: pinocchio.chatapp.v1.ChatToolResultReady.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
 	5,  // 28: pinocchio.chatapp.v1.ChatToolCallFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
 	1,  // 29: pinocchio.chatapp.v1.ChatUserMessageAccepted.attachments:type_name -> pinocchio.chatapp.v1.ChatAttachment
-	5,  // 30: pinocchio.chatapp.v1.ChatMessageEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	1,  // 31: pinocchio.chatapp.v1.ChatMessageEntity.attachments:type_name -> pinocchio.chatapp.v1.ChatAttachment
-	5,  // 32: pinocchio.chatapp.v1.ToolCallEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	5,  // 33: pinocchio.chatapp.v1.ToolResultEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	34, // [34:34] is the sub-list for method output_type
-	34, // [34:34] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	4,  // 30: pinocchio.chatapp.v1.ChatRunEntity.usage:type_name -> pinocchio.chatapp.v1.UsageInfo
+	5,  // 31: pinocchio.chatapp.v1.ChatMessageEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	1,  // 32: pinocchio.chatapp.v1.ChatMessageEntity.attachments:type_name -> pinocchio.chatapp.v1.ChatAttachment
+	5,  // 33: pinocchio.chatapp.v1.ToolCallEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	5,  // 34: pinocchio.chatapp.v1.ToolResultEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	35, // [35:35] is the sub-list for method output_type
+	35, // [35:35] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_pinocchio_chatapp_v1_chat_proto_init() }
@@ -3668,7 +4005,7 @@ func file_pinocchio_chatapp_v1_chat_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pinocchio_chatapp_v1_chat_proto_rawDesc), len(file_pinocchio_chatapp_v1_chat_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   37,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
