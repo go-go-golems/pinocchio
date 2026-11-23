@@ -98,6 +98,8 @@ type Server struct {
 	createHook       CreateHook
 	sseConfig        SSEConfig
 	maxBodyBytes     int64
+	stateDir         string
+	stateClosers     []func() error
 
 	service       *chatapp.Service
 	hub           *sessionstream.Hub
@@ -226,6 +228,14 @@ func New(opts ...Option) (*Server, error) {
 	if s.resolver == nil {
 		return nil, errors.New("httpapi: a runtime resolver is required (WithRuntimeResolver)")
 	}
+	stateSessions, err := s.openStateDir(s.storeOpt == nil)
+	if err != nil {
+		_ = s.closeState()
+		return nil, err
+	}
+	if stateSessions != nil {
+		s.storeOpt = stateSessions
+	}
 	s.prefix = "/" + strings.Trim(strings.TrimSpace(s.prefix), "/")
 	if s.prefix == "/" {
 		s.prefix = ""
@@ -246,17 +256,23 @@ func New(opts ...Option) (*Server, error) {
 
 	reg := sessionstream.NewSchemaRegistry()
 	if err := chatapp.RegisterSchemas(reg, s.plugins...); err != nil {
+		_ = s.closeState()
 		return nil, err
 	}
 	store, cleanup, err := s.openHydrationStore(reg)
 	if err != nil {
+		_ = s.closeState()
 		return nil, err
 	}
 	closeStore := func() error {
+		var err error
 		if cleanup != nil {
-			return cleanup()
+			err = cleanup()
 		}
-		return nil
+		if serr := s.closeState(); err == nil {
+			err = serr
+		}
+		return err
 	}
 	ws, err := wstransport.NewServer(&hydrationSnapshotProvider{server: s}, wstransport.WithSubscribeAuthorizer(s.authorizeSubscribe))
 	if err != nil {

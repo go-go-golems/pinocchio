@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -119,4 +120,58 @@ func (r recordingExecutor) ExecuteToolCall(ctx context.Context, call geptools.To
 
 func (r recordingExecutor) ExecuteToolCalls(context.Context, []geptools.ToolCall, geptools.ToolRegistry) ([]*geptools.ToolResult, error) {
 	return nil, errors.New("unused")
+}
+
+// waitingExecutor waits `wait` inside AwaitPerson, then answers "ok" (or the
+// context's error).
+type waitingExecutor struct{ wait time.Duration }
+
+func (w waitingExecutor) ExecuteToolCall(ctx context.Context, call geptools.ToolCall, _ geptools.ToolRegistry) (*geptools.ToolResult, error) {
+	release := AwaitPerson(ctx)
+	defer release()
+	select {
+	case <-time.After(w.wait):
+		return &geptools.ToolResult{ID: call.ID, Result: "ok"}, nil
+	case <-ctx.Done():
+		return &geptools.ToolResult{ID: call.ID, Error: "cancelled"}, nil
+	}
+}
+
+func (w waitingExecutor) ExecuteToolCalls(ctx context.Context, calls []geptools.ToolCall, reg geptools.ToolRegistry) ([]*geptools.ToolResult, error) {
+	return nil, nil
+}
+
+func personDeadline(limit, person time.Duration, states *[]string) Middleware {
+	var mu sync.Mutex
+	return DeadlineBy(func(context.Context, geptools.ToolCall) time.Duration { return limit }, func(call geptools.ToolCall, _ time.Duration) string { return "too slow" },
+		WithPersonLimit(func(context.Context, geptools.ToolCall) time.Duration { return person }),
+		OnState(func(_ context.Context, call geptools.ToolCall, state string, d time.Duration) {
+			mu.Lock()
+			defer mu.Unlock()
+			*states = append(*states, call.ID+" "+state+" "+d.String())
+		}))
+}
+
+func TestACallThatWaitsForAPersonGetsThePersonLimit(t *testing.T) {
+	var states []string
+	exec := personDeadline(20*time.Millisecond, time.Second, &states)(waitingExecutor{wait: 80 * time.Millisecond})
+	res, err := exec.ExecuteToolCall(context.Background(), geptools.ToolCall{ID: "c1", Name: "eval"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, "ok", res.Result, "waiting longer than the ordinary limit is fine while a person decides")
+	require.Equal(t, []string{"c1 awaiting-person 1s", "c1 running 20ms"}, states)
+}
+
+func TestAPersonWaitHasItsOwnLimit(t *testing.T) {
+	var states []string
+	exec := personDeadline(time.Second, 20*time.Millisecond, &states)(waitingExecutor{wait: time.Second})
+	res, err := exec.ExecuteToolCall(context.Background(), geptools.ToolCall{ID: "c2", Name: "eval"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, "too slow", res.Error)
+	require.Nil(t, res.Result)
+}
+
+func TestAwaitPersonWithoutADeadlineDoesNothing(t *testing.T) {
+	release := AwaitPerson(context.Background())
+	release()
+	release()
 }

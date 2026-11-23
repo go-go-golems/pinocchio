@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -75,13 +76,104 @@ func Deadline(d time.Duration, message DeadlineMessage) Middleware {
 }
 
 // DeadlineBy is Deadline with a limit per call (e.g. longer for tools that
-// wait for a person); a limit <= 0 means none for that call.
-func DeadlineBy(limit func(ctx context.Context, call geptools.ToolCall) time.Duration, message DeadlineMessage) Middleware {
+// wait for a person); a limit <= 0 means none for that call. Options add a
+// limit for the time a call waits for a person (WithPersonLimit, AwaitPerson)
+// and a callback when that starts and ends (OnState).
+func DeadlineBy(limit func(ctx context.Context, call geptools.ToolCall) time.Duration, message DeadlineMessage, opts ...DeadlineOption) Middleware {
 	if message == nil {
 		message = DefaultDeadlineMessage
 	}
+	var o deadlineOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&o)
+		}
+	}
 	return func(next geptools.ToolExecutor) geptools.ToolExecutor {
-		return &deadlineExecutor{next: next, limit: limit, message: message}
+		return &deadlineExecutor{next: next, limit: limit, message: message, opts: o}
+	}
+}
+
+// DeadlineOption configures DeadlineBy.
+type DeadlineOption func(*deadlineOptions)
+
+type deadlineOptions struct {
+	person  func(ctx context.Context, call geptools.ToolCall) time.Duration
+	onState func(ctx context.Context, call geptools.ToolCall, state string, limit time.Duration)
+}
+
+// WithPersonLimit is the limit while a call waits for a person (between
+// AwaitPerson and its release). Without it, waiting does not change the limit.
+func WithPersonLimit(limit func(ctx context.Context, call geptools.ToolCall) time.Duration) DeadlineOption {
+	return func(o *deadlineOptions) { o.person = limit }
+}
+
+// OnState is called when a call starts waiting for a person (state
+// "awaiting-person") and when it stops ("running"), with the limit that now
+// applies. agentserver publishes it as ChatToolCallProgress.
+func OnState(fn func(ctx context.Context, call geptools.ToolCall, state string, limit time.Duration)) DeadlineOption {
+	return func(o *deadlineOptions) { o.onState = fn }
+}
+
+// States reported to OnState.
+const (
+	StateAwaitingPerson = "awaiting-person"
+	StateRunning        = "running"
+)
+
+// AwaitPerson says that the tool call running in ctx now waits for a person
+// (an approval, say). Until release is called, the call's limit is the person
+// limit (WithPersonLimit); after it, the ordinary limit starts again from
+// zero. Waits may nest; only the outermost changes the limit. Without a
+// deadline in ctx it does nothing, so a tool may call it unconditionally.
+func AwaitPerson(ctx context.Context) func() {
+	c, _ := ctx.Value(callControlKey{}).(*callControl)
+	if c == nil {
+		return func() {}
+	}
+	c.await()
+	var once sync.Once
+	return func() { once.Do(c.release) }
+}
+
+type callControlKey struct{}
+
+// callControl is one call's timer: the ordinary limit, or the person limit
+// while the call waits for a person.
+type callControl struct {
+	mu      sync.Mutex
+	timer   *time.Timer
+	waits   int
+	ctx     context.Context
+	call    geptools.ToolCall
+	limit   time.Duration
+	person  time.Duration
+	onState func(ctx context.Context, call geptools.ToolCall, state string, limit time.Duration)
+}
+
+func (c *callControl) await() {
+	c.mu.Lock()
+	c.waits++
+	first := c.waits == 1
+	if first {
+		c.timer.Reset(c.person)
+	}
+	c.mu.Unlock()
+	if first && c.onState != nil {
+		c.onState(c.ctx, c.call, StateAwaitingPerson, c.person)
+	}
+}
+
+func (c *callControl) release() {
+	c.mu.Lock()
+	c.waits--
+	last := c.waits == 0
+	if last {
+		c.timer.Reset(c.limit)
+	}
+	c.mu.Unlock()
+	if last && c.onState != nil {
+		c.onState(c.ctx, c.call, StateRunning, c.limit)
 	}
 }
 
@@ -89,6 +181,7 @@ type deadlineExecutor struct {
 	next    geptools.ToolExecutor
 	limit   func(ctx context.Context, call geptools.ToolCall) time.Duration
 	message DeadlineMessage
+	opts    deadlineOptions
 }
 
 func (e *deadlineExecutor) ExecuteToolCall(ctx context.Context, call geptools.ToolCall, registry geptools.ToolRegistry) (*geptools.ToolResult, error) {
@@ -96,10 +189,19 @@ func (e *deadlineExecutor) ExecuteToolCall(ctx context.Context, call geptools.To
 	if d <= 0 {
 		return e.next.ExecuteToolCall(ctx, call, registry)
 	}
+	person := d
+	if e.opts.person != nil {
+		if p := e.opts.person(ctx, call); p > 0 {
+			person = p
+		}
+	}
 	started := time.Now()
-	callCtx, cancel := context.WithTimeoutCause(ctx, d, errDeadline)
-	defer cancel()
-	res, err := e.next.ExecuteToolCall(callCtx, call, registry)
+	callCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	ctl := &callControl{ctx: ctx, call: call, limit: d, person: person, onState: e.opts.onState}
+	ctl.timer = time.AfterFunc(d, func() { cancel(errDeadline) })
+	defer ctl.timer.Stop()
+	res, err := e.next.ExecuteToolCall(context.WithValue(callCtx, callControlKey{}, ctl), call, registry)
 	if ctx.Err() == nil && errors.Is(context.Cause(callCtx), errDeadline) {
 		if res == nil {
 			res = &geptools.ToolResult{ID: call.ID}

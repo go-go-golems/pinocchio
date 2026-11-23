@@ -128,3 +128,13 @@ func (s *Server) decodeBody(w http.ResponseWriter, r *http.Request, v any) ([]by
 	}
 	return body, true
 }
+
+// Coded is an error with a stable code (chatapp.CodedError): a hook that
+// returns it answers the request with that code, and with the code's own
+// status where it has one (session_exists 409, forbidden 403, ...).
+func Coded(code, msg string) error { return codedErr{code: code, msg: msg} }
+
+type codedErr struct{ code, msg string }
+
+func (e codedErr) Error() string { return e.msg }
+func (e codedErr) Code() string  { return e.code }

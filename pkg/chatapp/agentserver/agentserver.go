@@ -20,6 +20,19 @@
 //
 // Besides httpapi's routes under the prefix (default "/v1"), the server
 // answers GET /health, GET /presets and GET /models.
+//
+// A program that embeds the server adds what only it knows:
+//
+//	srv, _ := agentserver.New(presets,
+//	    agentserver.WithToolRegistry(tools),            // in-process tools; a preset's tools: list picks from them
+//	    agentserver.WithSessionInstructions(apiRef),    // once per session, after the preset's prompt
+//	    agentserver.WithMessageContext(whatChanged),    // per message, after the page's context
+//	    agentserver.WithStateDir(dir))
+//
+// An in-process tool finds its session with srv.Session(ctx) and calls
+// toolexec.AwaitPerson(ctx) while a person decides: the preset's
+// personTimeout applies instead of its toolTimeout, and the call's
+// ChatToolCall entity says "awaiting-person" (ChatToolCallProgress).
 package agentserver
 
 import (
@@ -27,7 +40,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,6 +50,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
@@ -48,7 +61,6 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/toolkit/presets"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/toolkit/toolexec"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/pkg/errors"
 )
@@ -118,12 +130,21 @@ type SessionData struct {
 	// Instructions are appended to the preset's system prompt (presets with
 	// pageInstructions: true).
 	Instructions string `json:"instructions,omitempty"`
+	// ServerInstructions are the embedding program's (WithSessionInstructions),
+	// written when the session is created; a page cannot set them.
+	ServerInstructions string `json:"serverInstructions,omitempty"`
 }
 
-type codedError struct{ code, msg string }
+// SessionInstructionsFunc gives a new session's instructions from the
+// embedding program (e.g. an API reference); they follow the preset's system
+// prompt for the session's life.
+type SessionInstructionsFunc func(ctx context.Context, info sessions.Info) (string, error)
 
-func (e codedError) Error() string { return e.msg }
-func (e codedError) Code() string  { return e.code }
+// MessageContextFunc gives a message's context from the embedding program
+// (e.g. the state the agent works in); a non-empty text becomes a user block
+// after the message and after the page's own context. The conversation is
+// append-only: return what changed, not the whole state every time.
+type MessageContextFunc func(ctx context.Context, info sessions.Info, msg httpapi.MessageRequest) (string, error)
 
 // Server is the agent service.
 type Server struct {
@@ -141,6 +162,9 @@ type Server struct {
 	browserTools  *frontendtools.Manager
 	httpOptions   []httpapi.Option
 	closers       []func() error
+
+	sessionInstructions SessionInstructionsFunc
+	messageContext      MessageContextFunc
 }
 
 // Option configures a Server.
@@ -167,6 +191,18 @@ func WithPrefix(prefix string) Option { return func(s *Server) { s.prefix = pref
 
 // WithTexts replaces the texts the server gives the model.
 func WithTexts(t Texts) Option { return func(s *Server) { s.texts = t } }
+
+// WithSessionInstructions sets instructions from the embedding program for
+// every new session (SessionInstructionsFunc).
+func WithSessionInstructions(fn SessionInstructionsFunc) Option {
+	return func(s *Server) { s.sessionInstructions = fn }
+}
+
+// WithMessageContext sets context from the embedding program for every
+// message (MessageContextFunc).
+func WithMessageContext(fn MessageContextFunc) Option {
+	return func(s *Server) { s.messageContext = fn }
+}
 
 // WithToolRegistry offers in-process tools: a preset's tools list picks from
 // registry by name.
@@ -228,14 +264,11 @@ func New(ps map[string]*presets.Preset, opts ...Option) (*Server, error) {
 		httpapi.WithBlocks(s.contextBlocks),
 		httpapi.WithFrontendTools(s.browserTools),
 		httpapi.WithChatPlugins(frontendtools.NewPlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
+		// in-process tools find their run (Session, tool progress) through the context
+		httpapi.WithEngineOptions(chatapp.WithRunTools(keepRun)),
 	}
 	if s.stateDir != "" {
-		stores, err := s.openStores()
-		if err != nil {
-			_ = s.Close()
-			return nil, err
-		}
-		httpOpts = append(httpOpts, stores...)
+		httpOpts = append(httpOpts, httpapi.WithStateDir(s.stateDir))
 	}
 	api, err := httpapi.New(append(httpOpts, s.httpOptions...)...)
 	if err != nil {
@@ -245,25 +278,6 @@ func New(ps map[string]*presets.Preset, opts ...Option) (*Server, error) {
 	s.api = api
 	s.closers = append(s.closers, api.Close)
 	return s, nil
-}
-
-func (s *Server) openStores() ([]httpapi.Option, error) {
-	sessionStore, err := sessions.NewSQLiteStore("file:" + filepath.Join(s.stateDir, "sessions.db") + "?_busy_timeout=5000&_journal_mode=WAL")
-	if err != nil {
-		return nil, errors.Wrap(err, "open session store")
-	}
-	s.closers = append(s.closers, sessionStore.Close)
-	turnStore, err := chatstore.NewSQLiteTurnStore(filepath.Join(s.stateDir, "turns.db"))
-	if err != nil {
-		return nil, errors.Wrap(err, "open turn store")
-	}
-	s.closers = append(s.closers, turnStore.Close)
-	return []httpapi.Option{
-		httpapi.WithSessionStore(sessionStore),
-		httpapi.WithTurnStore(turnStore),
-		httpapi.WithTurnsDBPath(filepath.Join(s.stateDir, "turns.db")),
-		httpapi.WithHydrationStoreSpec(serverkit.StoreSpec{Backend: serverkit.StoreBackendSQLite, Path: filepath.Join(s.stateDir, "timeline.db")}),
-	}, nil
 }
 
 // API is the httpapi server (sessions store, chatapp service).
@@ -353,26 +367,29 @@ func (s *Server) completeSession(ctx context.Context, _ httpapi.Principal, info 
 	p := s.presets[name]
 	if p == nil {
 		if name == "" {
-			return codedError{CodeUnknownPreset, fmt.Sprintf("choose a preset (labels.preset): %s", strings.Join(presets.Names(s.presets), ", "))}
+			return httpapi.Coded(CodeUnknownPreset, fmt.Sprintf("choose a preset (labels.preset): %s", strings.Join(presets.Names(s.presets), ", ")))
 		}
-		return codedError{CodeUnknownPreset, fmt.Sprintf("unknown preset %q", name)}
+		return httpapi.Coded(CodeUnknownPreset, fmt.Sprintf("unknown preset %q", name))
 	}
 	info.Labels["preset"] = name
 	if ref := info.Labels["model"]; ref != "" && s.models != nil {
 		if _, err := s.models.Resolve(ctx, ref, modelsource.Options{}); err != nil {
-			return codedError{CodeUnknownModel, err.Error()}
+			return httpapi.Coded(CodeUnknownModel, err.Error())
 		}
 	}
 	data, err := sessionData(*info)
 	if err != nil {
-		return codedError{httpapi.CodeInvalidRequest, err.Error()}
+		return httpapi.Coded(httpapi.CodeInvalidRequest, err.Error())
+	}
+	if err := s.setServerInstructions(ctx, info); err != nil {
+		return err
 	}
 	if data.Instructions != "" {
 		if !pageInstructions(p) {
-			return codedError{CodeInstructionsNotAllowed, fmt.Sprintf("preset %q does not accept page instructions", name)}
+			return httpapi.Coded(CodeInstructionsNotAllowed, fmt.Sprintf("preset %q does not accept page instructions", name))
 		}
 		if limit := maxPageInstructionsBytes(p); len(data.Instructions) > limit {
-			return codedError{CodePromptTooLarge, fmt.Sprintf("page instructions are at most %d bytes", limit)}
+			return httpapi.Coded(CodePromptTooLarge, fmt.Sprintf("page instructions are at most %d bytes", limit))
 		}
 	}
 	return nil
@@ -382,7 +399,7 @@ func (s *Server) completeSession(ctx context.Context, _ httpapi.Principal, info 
 func (s *Server) resolve(ctx context.Context, _ *http.Request, info sessions.Info, _ httpapi.MessageRequest) (*infruntime.ComposedRuntime, error) {
 	p := s.presets[info.Labels["preset"]]
 	if p == nil {
-		return nil, codedError{CodeUnknownPreset, fmt.Sprintf("the session's preset %q is no longer defined", info.Labels["preset"])}
+		return nil, httpapi.Coded(CodeUnknownPreset, fmt.Sprintf("the session's preset %q is no longer defined", info.Labels["preset"]))
 	}
 	base, modelRef, err := s.engineFor(ctx, p, info)
 	if err != nil {
@@ -393,8 +410,10 @@ func (s *Server) resolve(ctx context.Context, _ *http.Request, info sessions.Inf
 		return nil, err
 	}
 	system := p.SystemText()
-	if data.Instructions != "" {
-		system = strings.TrimRight(system, "\n") + "\n\n" + data.Instructions
+	for _, extra := range []string{data.ServerInstructions, data.Instructions} {
+		if strings.TrimSpace(extra) != "" {
+			system = strings.TrimRight(system, "\n") + "\n\n" + extra
+		}
 	}
 	mws := []middleware.Middleware{middleware.NewToolResultReorderMiddleware()}
 	if strings.TrimSpace(system) != "" {
@@ -422,7 +441,11 @@ func (s *Server) resolve(ctx context.Context, _ *http.Request, info sessions.Inf
 		ToolConfig: &toolCfg,
 		RoundGuard: budget.SessionTokens(s.api.Sessions(), p.Budget.TokensPerSession),
 		WrapToolExecutor: toolexec.Compose(
-			toolexec.DeadlineBy(s.callLimit(p, timeout), s.texts.ToolTimeout),
+			toolexec.DeadlineBy(s.callLimit(p, timeout), s.texts.ToolTimeout,
+				toolexec.WithPersonLimit(func(context.Context, geptools.ToolCall) time.Duration {
+					return extraDuration(p, "personTimeout", DefaultPersonTimeout)
+				}),
+				toolexec.OnState(publishToolState)),
 			toolexec.CutResults(orInt(p.ResultCut, DefaultResultCut), s.texts.ResultCut),
 		),
 		RuntimeKey:         p.Name,
@@ -441,7 +464,7 @@ func (s *Server) engineFor(ctx context.Context, p *presets.Preset, info sessions
 		ref = p.Model
 	}
 	if ref == "" {
-		return nil, "", codedError{CodeUnknownModel, fmt.Sprintf("preset %q names no model and the session chose none", p.Name)}
+		return nil, "", httpapi.Coded(CodeUnknownModel, fmt.Sprintf("preset %q names no model and the session chose none", p.Name))
 	}
 	thinking := info.Labels["thinking"]
 	if thinking == "" {
@@ -449,7 +472,7 @@ func (s *Server) engineFor(ctx context.Context, p *presets.Preset, info sessions
 	}
 	resolved, err := s.models.Resolve(ctx, ref, modelsource.Options{Thinking: thinking, MaxTokens: p.MaxTokens})
 	if err != nil {
-		return nil, "", codedError{CodeUnknownModel, err.Error()}
+		return nil, "", httpapi.Coded(CodeUnknownModel, err.Error())
 	}
 	eng, err := resolved.Engine()
 	return eng, resolved.Model.Ref, err
@@ -470,29 +493,28 @@ func (s *Server) callLimit(p *presets.Preset, timeout time.Duration) func(contex
 	}
 }
 
-// contextBlocks is the BlocksFunc: a message's "context" becomes a user
-// block after the person's message.
-func (s *Server) contextBlocks(_ context.Context, info sessions.Info, msg httpapi.MessageRequest) ([]turns.Block, error) {
-	if len(msg.Raw) == 0 {
-		return nil, nil
-	}
-	var extra MessageExtra
-	if err := json.Unmarshal(msg.Raw, &extra); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(extra.Context) == "" {
-		return nil, nil
-	}
+// contextBlocks is the BlocksFunc: a message's "context" (the page's) and the
+// embedding program's context (WithMessageContext) become user blocks after
+// the person's message, in that order.
+func (s *Server) contextBlocks(ctx context.Context, info sessions.Info, msg httpapi.MessageRequest) ([]turns.Block, error) {
 	limit := DefaultMaxContextBytes
 	if p := s.presets[info.Labels["preset"]]; p != nil {
 		if v, ok := p.Extra["maxContextBytes"].(int); ok && v > 0 {
 			limit = v
 		}
 	}
-	if len(extra.Context) > limit {
-		return nil, codedError{CodePromptTooLarge, fmt.Sprintf("a message's context is at most %d bytes", limit)}
+	blocks, err := httpapi.ContextField(limit)(ctx, info, msg)
+	if err != nil || s.messageContext == nil {
+		return blocks, err
 	}
-	return []turns.Block{turns.NewUserTextBlock(extra.Context)}, nil
+	text, err := s.messageContext(ctx, info, msg)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(text) != "" {
+		blocks = append(blocks, turns.NewUserTextBlock(text))
+	}
+	return blocks, nil
 }
 
 func extraDuration(p *presets.Preset, key string, def time.Duration) time.Duration {
