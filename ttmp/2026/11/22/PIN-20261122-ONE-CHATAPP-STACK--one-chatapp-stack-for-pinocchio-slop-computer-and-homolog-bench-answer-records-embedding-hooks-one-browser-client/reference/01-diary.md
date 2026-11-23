@@ -195,3 +195,76 @@ instructions, server-side context per message, an in-process tool that waits for
 - `git show db9cc10a a42c4a26`; start with `pkg/chatapp/stamp.go`, `projections.go`, `agentserver/run.go`,
   `toolkit/toolexec/toolexec.go` (`DeadlineBy`, `AwaitPerson`).
 - `go test -race ./pkg/chatapp/...`; `make lint`.
+
+## Step 3: The shared browser client (phase 3)
+
+`pkg/chatapp/webclient` is the one browser client: a pure `Timeline` that mirrors the server's projections and
+derives `answers()`, and a `Session` that does the I/O. Its built file is embedded in the Go module and served at
+`{prefix}/client.js`. The test that matters is the agreement test: real conversations through agentserver, captured,
+and replayed into the client, which must reproduce the server's snapshot exactly.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phase 3 of the guide.
+**Commit (code):** 75780996 — "chatapp: one browser client, served by the server it talks to (pkg/chatapp/webclient)"
+
+### What I did
+- `src/timeline.ts`: reducer per event name, written against `projections.go`, `plugins/reasoning.go`
+  (`reasoningEntityFromFields`), `plugins/toolcall.go` (`toolCallFieldsFromCanonical`, `mergeToolCallFields`),
+  `frontendtools/plugin.go`; `ApplyStreamPatch` semantics (append for APPEND/UNSPECIFIED, replace otherwise).
+  `answers()` groups by id (`<run>-user`, `parentMessageId`, `messageId`), orders parts by creation ordinal, merges a
+  call's `ChatToolCall`/`ChatToolResult`/`ChatFrontendToolCall` into one part.
+- `src/session.ts`: from slop's `agent.ts` (single path, outbox, executor assignment), generalized: `create/open/list`,
+  `on`, `send` → message id, `wait(id)`, `stop`, `delete`, `close`, `tools(list)`; SSE parsed from `fetch` bodies.
+- `webclient.go` (`//go:embed chatapp-client.js`, `Handler` with ETag); httpapi route `GET {prefix}/client.js`.
+- `capture_test.go` (package `webclient_test`): four scenarios through agentserver + scripted engine (`Delay` 15 ms so
+  a second stream can attach mid-answer); `node --test test/` with `CHATAPP_CAPTURES`; skipped without node.
+- `package.json` (esbuild 0.25.12, typescript 5.9.3, the versions slop pins), `tsconfig.json`, `make webclient`,
+  `make webclient-check`, `.github/workflows/webclient-check.yml` (Node 22).
+
+### Why
+- Testing the client against captures from the current server, on every `go test`, turns "the client mirrors the
+  projections" from a promise into a checked property (guide D3).
+- Tests import the built bundle, not the TypeScript, so they run on any Node with `node:test` (no type stripping), and
+  they check the exact file that is served.
+
+### What worked
+- First run against the server: 17/17 Node checks, including the stream that attached mid-answer (its snapshot is
+  partial; replaying the rest gives the final snapshot).
+- Mutation check: changing `providerCalls + 1` to `+ 2` in the bundle fails 9 of 17 checks; a rebuild reproduces the
+  committed file byte for byte (`cmp`).
+- `go test ./...`, `make lint` (0 issues), `make logcopter-check` pass.
+
+### What didn't work
+- `tsc`: `Property 'messageId' does not exist on type '{ toolCallId: string; }'` — a spread object needed the
+  `Payload` type.
+- `TestTheServerServesTheEmbeddedClient` asserted `class Session`; esbuild emits `var Session = class _Session`.
+  Now asserts an ES module (`export {`).
+- `make logcopter-check`: `generated file is not current: …/pkg/chatapp/webclient/logcopter.go` — every package
+  carries a generated logger; generated it with `go tool logcopter-gen … ./pkg/chatapp/webclient`.
+- `gofmt` on `httpapi/server.go` after adding the import.
+
+### What I learned
+- Go's `./...` does not skip `node_modules`; esbuild's npm package contains no `.go` files, checked with `find`.
+- `.gitignore` has `dist/`, so the bundle lives at the package root as `chatapp-client.js`.
+
+### What was tricky to build
+- Agreement under protojson: the server omits empty values, the client keeps some explicitly (`streaming: false`,
+  `state: ""`). The comparison normalizes both sides the same way (drop `""`, `false`, `0`, `"0"`, `null`, empty
+  arrays and objects); int64 values stay strings on both sides because the client copies them from events.
+- Creation order: the client uses the event's `ordinal` for a new entity, the server's snapshot `createdOrdinal`; both
+  are the ordinal of the creating event, which the test compares.
+
+### What warrants a second pair of eyes
+- Compact UI transformers (`chatapp.WithUIEventTransformers`) are opt-in and httpapi does not use them; a server that
+  enables them would send events this client does not reduce.
+- `Session.#derive` aborts a running browser call when its entity leaves `requested` (the server gave up or got a
+  result from elsewhere).
+
+### What should be done in the future
+- react-chat's chat-provider could feed its Redux store from `Timeline` (phase 6, own ticket).
+
+### Code review instructions
+- `pkg/chatapp/webclient/src/timeline.ts` next to `pkg/chatapp/projections.go`; `test/agree.test.mjs`;
+  `capture_test.go`.
+- `make webclient-check`; `go test ./pkg/chatapp/webclient -keep-captures <dir>` to look at the captures.
