@@ -104,3 +104,94 @@ seen in homolog-bench and slop cannot recur, documented well enough for a newcom
   browser tool calls, which use `parentMessageId`; "four times" needed "one definition, three copies"; who stamps times
   and how a tool's waiting state reaches the stream were missing; the built-file check was vague (now a `make` target
   and CI diff); the plan lacked a first command.
+
+## Step 2: Answers as records, and the embedding hooks (phases 1 and 2)
+
+Phase 1 made every fact a page shows about an answer part of the timeline: the run entity now holds model, start,
+finish, usage and the number of model calls, and every part entity has start and end times. Phase 2 moved what each
+embedding program re-implemented into pinocchio, and added the three hooks homolog-bench needs (server-side
+instructions, server-side context per message, an in-process tool that waits for a person).
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phases 1 and 2 of the guide, with tests and commits.
+**Commit (code):** db9cc10a — "chatapp: an answer is a record (run model, times, usage; part times)"; a42c4a26 —
+"chatapp: embedding hooks (state dir, context field, server instructions and context, person waits)"
+
+### What I did
+- Protos (`chat.proto`, `frontend_tool.proto`): times on lifecycle events (`at_ms`, `started_at_ms`,
+  `finished_at_ms`), `model` on `ChatRunStarted`, `message_id` on `ChatProviderCallFinished`, record fields on
+  `ChatRunEntity`, times on `ChatMessageEntity`/`ToolCallEntity`/`FrontendToolCallEntity`, `state` on
+  `ToolCallEntity`, new `ChatToolCallProgress`. Regenerated with the earlier ticket's
+  `scripts/01-proto-gen-local.sh` (protoc-gen-go v1.36.12, protoc-gen-es v2.14.0) and buf v1.50.0 installed into the
+  scratchpad; generator headers unchanged.
+- `pkg/chatapp/stamp.go`: `Stamped(pub)` and `StampTimes(msg, now)` set unset time fields through protoreflect.
+  `handleStartInference` stamps the run's publisher (tools receive the same publisher), frontendtools'
+  `HandleManifest`, `HandleResult` and `Request` stamp theirs.
+- Projections: `ChatRun` gets model/times/usage (`AddUsage`, `providerCalls++` per provider call of the run); text
+  (`projections.go`), thinking (`plugins/reasoning.go`), tool calls (`plugins/toolcall.go`, plus
+  `ChatToolCallProgress` → `state`) and browser tools (`frontendtools/plugin.go`) copy times; `StartAt` sets a start
+  once.
+- `ComposedRuntime.Model`; agentserver sets the resolved model reference.
+- scripted engine: `/think THOUGHT -- REST`.
+- httpapi: `WithStateDir`, `ContextField`, `Coded`; agentserver: `WithSessionInstructions`, `WithMessageContext`,
+  `Session(ctx)` (the run kept through `chatapp.WithRunTools(keepRun)`), person limit and `OnState` →
+  `ChatToolCallProgress`; its `openStores` and `codedError` removed.
+- toolexec: the deadline uses a resettable timer (`time.AfterFunc` + `context.WithCancelCause`) and puts a
+  `callControl` into the call's context; `AwaitPerson` resets it to the person limit, its release back to the full
+  ordinary limit (agentd's `SetCallState` semantics).
+
+### Why
+- Times are stamped where events are published, not in projections, so replaying the event log gives the same
+  entities (guide D4). Stamping in one publisher wrapper instead of at each of ~15 publish sites means a new event
+  type with an `at_ms` field cannot be forgotten.
+
+### What worked
+- `TestAnAnswerIsARecordInTheSnapshot` (`/think plan the call -- /tool noop {}`): the snapshot alone has model
+  `fake:scripted`, start ≤ finish within the test window, `providerCalls` 2, usage, and times on the user message,
+  thinking, text and tool call.
+- `TestAToolThatWaitsForAPersonOutlastsTheToolLimitAndSaysSo`: a tool waits 150 ms (limit 50 ms) inside
+  `AwaitPerson` and succeeds; the stream carries `awaiting-person`, then `running`.
+- `go test -race ./pkg/chatapp/...` and `make lint` (0 issues) pass.
+
+### What didn't work
+- A Python edit script failed before writing anything: `SyntaxError: invalid syntax. Perhaps you forgot a comma?`
+  (a `\'` inside a single-quoted literal). Rewrote it with double quotes.
+- `which buf protoc-gen-go protoc-gen-es` found nothing; installed buf v1.50.0 with `GOBIN=<scratch>/bin go install`.
+- A text segment's entity is created by its first `ChatTextPatch`, not by `ChatTextSegmentStarted` (the projection
+  returns nil for an empty segment), so start times were missing until patches got `at_ms` too.
+- `TestOnlySessionsReachesTheStoreUnchecked` failed: `state.go:35:5: openStateDir uses .storeOpt; handlers reach
+  sessions through s.guard.For(p)`. httpapi has an AST test that allows the raw store only in `New` and
+  `WithSessionStore`. Instead of widening it, `openStateDir` returns the session store and `New` assigns it.
+- Two assertion mistakes in my tests: geppetto JSON-encodes a string tool result (`ask returned: "approved in
+  lab"`), and protojson omits an empty `state` (nil, not `""`).
+- `make lint`: `gofmt` on agentserver.go and `nonamedreturns` on `AwaitPerson(ctx) (release func())`; fixed.
+- A negative check (stash projections.go, expect the test to fail) broke the build instead, since the plugins use
+  helpers from that file; the test's assertions (`providerCalls` 2, `model`) cannot pass without the change anyway.
+
+### What I learned
+- `ChatProviderCallFinished` reached clients with `"correlation":{}`; the sink knew the run all along.
+- httpapi protects its session store with a structural test; respect such tests rather than editing their allowlist.
+
+### What was tricky to build
+- The person-wait timer. `context.WithTimeoutCause` cannot be extended, so the middleware now owns a `time.Timer`
+  that cancels the call's context with `errDeadline`; a deadline is recognised by `context.Cause`, a run stop by the
+  parent context's error (unchanged behaviour, `TestDeadlineKeepsTheResultWhenTheRunIsStopped`). Nested waits count;
+  only the outermost resets the timer.
+- Server instructions must not be page-settable. The create hook always rewrites `serverInstructions` in the
+  session's data, including deleting a page-sent value when the program sets none.
+
+### What warrants a second pair of eyes
+- `StampTimes` relies on field names (`at_ms`, `started_at_ms`, `finished_at_ms`). Entities have fields with the same
+  names; entities are never published, but a future event that embeds an entity would be stamped at the top level
+  only.
+- `ChatToolCallProgress` is published from the tool's goroutine through the run's publisher, concurrently with the
+  run sink's events; sessionstream orders them by ordinal, and `-race` is clean.
+
+### What should be done in the future
+- N/A for these phases.
+
+### Code review instructions
+- `git show db9cc10a a42c4a26`; start with `pkg/chatapp/stamp.go`, `projections.go`, `agentserver/run.go`,
+  `toolkit/toolexec/toolexec.go` (`DeadlineBy`, `AwaitPerson`).
+- `go test -race ./pkg/chatapp/...`; `make lint`.
