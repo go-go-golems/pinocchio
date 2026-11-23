@@ -1,0 +1,54 @@
+event: snapshot
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","snapshotOrdinal":"1","status":"idle","entities":[]}
+
+id: 2
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"2","name":"ChatUserMessageAccepted","payload":{"content":"/tool eval {\"code\":\"6*7\"}","messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d-user","role":"user","status":"accepted","text":"/tool eval {\"code\":\"6*7\"}"}}
+
+id: 3
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"3","name":"ChatRunStarted","payload":{"correlation":{"runId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d","sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d","prompt":"/tool eval {\"code\":\"6*7\"}"}}
+
+id: 4
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"4","name":"ChatProviderCallFinished","payload":{"correlation":{},"hasToolCalls":true,"stopReason":"stop","usage":{"inputTokens":15,"outputTokens":5}}}
+
+id: 5
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"5","name":"ChatFrontendToolCallRequested","payload":{"executor":{"assignmentId":"993df91e-e989-447f-8386-5aea921fba5f","clientInstanceId":"tab","connectionId":"c1"},"input":{"code":"6*7"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d","mode":"TOOL_EXECUTION_MODE_FRONTEND_AUTO","status":"requested","toolCallId":"call_d726c1e8","toolName":"eval"}}
+
+id: 6
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"6","name":"ChatFrontendToolResultReceived","payload":{"executor":{"assignmentId":"993df91e-e989-447f-8386-5aea921fba5f","clientInstanceId":"tab","connectionId":"c1"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d","result":42,"status":"success","toolCallId":"call_d726c1e8","toolName":"eval"}}
+
+id: 7
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"7","name":"ChatTextSegmentStarted","payload":{"correlation":{"segmentId":"db217237-4e83-4a8b-bdef-65d6518a3d82"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","prompt":"/tool eval {\"code\":\"6*7\"}","role":"assistant","status":"streaming","streaming":true}}
+
+id: 8
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"8","name":"ChatTextPatch","payload":{"correlation":{"segmentId":"db217237-4e83-4a8b-bdef-65d6518a3d82"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","mode":"CHAT_STREAM_PATCH_MODE_APPEND","prompt":"/tool eval {\"code\":\"6*7\"}","role":"assistant","sequence":"1","status":"streaming","streamId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","text":"eval "}}
+
+id: 9
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"9","name":"ChatTextPatch","payload":{"correlation":{"segmentId":"db217237-4e83-4a8b-bdef-65d6518a3d82"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","mode":"CHAT_STREAM_PATCH_MODE_APPEND","offset":"5","prompt":"/tool eval {\"code\":\"6*7\"}","role":"assistant","sequence":"2","status":"streaming","streamId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","text":"returned: "}}
+
+id: 10
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"10","name":"ChatTextPatch","payload":{"correlation":{"segmentId":"db217237-4e83-4a8b-bdef-65d6518a3d82"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","mode":"CHAT_STREAM_PATCH_MODE_APPEND","offset":"15","prompt":"/tool eval {\"code\":\"6*7\"}","role":"assistant","sequence":"3","status":"streaming","streamId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","text":"42"}}
+
+id: 11
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"11","name":"ChatTextSegmentFinished","payload":{"content":"eval returned: 42","correlation":{"segmentId":"db217237-4e83-4a8b-bdef-65d6518a3d82"},"final":true,"finishReason":"stop","messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d:text:db217237-4e83-4a8b-bdef-65d6518a3d82","prompt":"/tool eval {\"code\":\"6*7\"}","role":"assistant","status":"finished","text":"eval returned: 42"}}
+
+id: 12
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"12","name":"ChatProviderCallFinished","payload":{"correlation":{},"stopReason":"stop","usage":{"inputTokens":19,"outputTokens":3}}}
+
+id: 13
+event: ui
+data: {"sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83","ordinal":"13","name":"ChatRunFinished","payload":{"correlation":{"runId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d","sessionId":"2896897a-7823-4123-91ba-6955b3ca5b83"},"messageId":"chat-msg-93fa4b6b-3232-4360-9ae2-26c1977db39d","status":"finished"}}
+
+event: error
+data: {"code":"server_closed","error":"the server is shutting down"}
+
