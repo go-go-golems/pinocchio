@@ -360,7 +360,7 @@ hb-eval), `6a6b3c7` (page, UI tests), `87d32ae` (R5 check), `211366e` (HB-007 ti
   its fixtures cannot drift from what the reducer accepts.
 
 ### What worked
-- `go test ./...`; UI: agent (23 checks), agent-render (34), dock, replica, jobs, restart.
+- `go test ./...`; UI: agent (22 checks), agent-render (33), dock, replica, jobs, restart.
 - R1 on a real server: a second page opened while eval waits 2.5 s shows `reasoning,tool:running`, the same as
   the page that watched, and the same finished answer and footer.
 
