@@ -706,6 +706,7 @@ export class Timeline {
 export class Session {
   static create(base: string, req: { labels?: Record<string, string>; data?: unknown; id?: string }, o?: Options): Promise<Session>;
   static open(base: string, id: string, o?: Options): Promise<Session>;
+  static attach(base: string, info: SessionInfo, o?: Options): Promise<Session>; // a session the caller already listed or created
   static list(base: string, labels: Record<string, string>, o?: Options): Promise<SessionSummary[]>;
   readonly id: string; readonly timeline: Timeline; info: SessionInfo;
   on(fn: (ev: UIEvent | null) => void): () => void; // after every change (null: a snapshot)

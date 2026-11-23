@@ -268,3 +268,128 @@ and replayed into the client, which must reproduce the server's snapshot exactly
 - `pkg/chatapp/webclient/src/timeline.ts` next to `pkg/chatapp/projections.go`; `test/agree.test.mjs`;
   `capture_test.go`.
 - `make webclient-check`; `go test ./pkg/chatapp/webclient -keep-captures <dir>` to look at the captures.
+
+## Step 4: slop-computer on the shared client and the server helpers (phase 4)
+
+slop's agent capability now runs on what pinocchio provides. On the server, `httpapi.WithStateDir`, `ContextField`
+and `Coded` replace slop's copies, and `ComposedRuntime.Model` names the model. In the page, the stream, the
+timeline, browser tools and the outbox are the shared `Session`; `agent.ts` keeps slop's consent, open-by-key and a
+send's lifecycle. All 11 of slop's agent tests pass unchanged except for one fixture fix.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phase 4 of the guide.
+**Commits:** pinocchio `ea7ebbe8` ("webclient: Session.attach(base, info) …", branch `task/webclient-attach`,
+PR #222); slop-computer `261f9835` (branch `task/one-chatapp-client`, PR go-go-golems/slop-computer#57).
+
+### What I did
+- Pushing went wrong first (see below); then a worktree from `origin/main` (`../slop-computer-one-chatapp`), so the
+  diverged local `main` stays untouched.
+- pinocchio: `Session.attach(base, info)`. slop lists or creates its session itself (open by key), so it needs a
+  session object without another GET.
+- slop `go get github.com/go-go-golems/pinocchio@ea7ebbe8162d`; `agent.go`/`meter.go` onto `httpapi.WithStateDir`,
+  `httpapi.ContextField(MaxContextBytes)`, `httpapi.Coded`; `Model: model.Model`.
+- `web/runtime/sync-chatapp.mjs` copies `pkg/chatapp/webclient/src/*.ts` from `go list -m -f {{.Dir}}` into
+  `src/chatapp/`; `test/chatapp-copy.test.ts` fails while the copy differs from the module's source.
+- `agent.ts`: its `Session` wraps `ChatSession.attach(BASE, info, { fetch: fetchVia })` (slop's authenticated
+  `request` has fetch's shape); a send settles from `timeline.answer(runId)`; errors map from `ChatError` to slop's
+  `fail(code, message)`.
+
+### Why
+- Copying the TypeScript (not the built bundle) lets slop's esbuild bundle it into its IIFE runtime with its
+  transport, and the copy test keeps it the same as the Go module slop runs.
+
+### What worked
+- slop `make test` (Go): pass. Runtime tests: 32/32, including all 11 agent tests.
+
+### What didn't work
+- **The push.** `git push -q -u origin task/one-chatapp-stack` (phases 1–3) updated pinocchio **main**: the branch
+  was created from `origin/main`, so it tracked it, and the global `push.default=tracking` pushes to the upstream.
+  `gh pr create` then said `No commits between main and task/one-chatapp-stack`. The six commits
+  (`94c6f440..78a009e4`) are on main without review; PR #222 says so and asks for their review. Since then:
+  `--no-track` branches, `git push origin HEAD:refs/heads/<branch>`, and `git ls-remote` before a PR.
+- `pnpm test` hung: a failing test without a per-test timeout. With `--test-timeout=8000`, two tests failed:
+  `a run whose events all arrive before its 202 settles when the 202 names it` (8 s timeout). The scripted server's
+  events after a snapshot reused ordinals below the snapshot's (`snapshotOrdinal: "30"`, then `ordinal` 6, 7, …),
+  and the shared client ignores an event whose ordinal is not above the snapshot's, as it must. Fix in the fixture:
+  `ordinal = 30` (and `41`) after those snapshots.
+- `tsc` reports `Cannot find module 'node:test'` for every test file; the same 19 errors on untouched
+  `origin/main` (checked with `git stash -u`), so not from this change; `src/` has no errors.
+
+### What I learned
+- slop's old agent.ts accepted out-of-order ordinals because it never compared them; the shared client's rule
+  ("an event the copy already reflects is ignored") made the fixture's mistake visible.
+
+### What warrants a second pair of eyes
+- `sync-chatapp.mjs` needs `go` at test time; without it the copy test skips.
+
+## Step 5: homolog-bench on agentserver and the shared client (phase 5)
+
+hb-server's agent is now `agentserver` with the room's eval, instructions and context; the page renders
+`timeline.answers()` from the shared client served by the agent service; hb-eval reads replies from the answer's
+record. The agent session contract (homolog-bench HB-006 design-doc/02, R1–R6) is checked against the server.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phase 5 of the guide.
+**Commits (homolog-bench, branch `task/hb-007-chatapp`, PR wesen/homolog-bench#5):** `516d621` (server, eval,
+hb-eval), `6a6b3c7` (page, UI tests), `87d32ae` (R5 check), `211366e` (HB-007 ticket).
+
+### What I did
+- `server.Agent(mgr, presets, opts...)`: `agentserver.New` with `WithPrefix("/api/v1/agent")`,
+  `WithToolRegistry(eval)`, `WithSessionInstructions(room API reference)`, `WithMessageContext(room context)`.
+  The tool needs the server (`srv.Session`) and the server needs the tool: a closure over the variable.
+- eval: `geptools.NewToolFromFunc` with ctx; `CurrentToolCallFromContext` for the call id the room logs; a
+  `personWait` turns the room's `OnAwaiting("awaiting-person" | "running")` into `toolexec.AwaitPerson` and its
+  release (mutex: the room calls it from its goroutine).
+- `GET /api/v1/rooms/{id}/agent-context`: the judge (hb-eval) was shown the session's first context message;
+  chatapp keeps context blocks in the turn, not in the timeline, so the room renders it on request.
+- evalrun client: `NewSession(preset, model, labels)`, `Turn` (stream opened before the POST; ends on the run's
+  `ChatRun*` event, or a 2 s poll when the run ended before its id was known; reply from the snapshot), `Model`,
+  `SessionUsage`, cost from `GET /models` prices.
+- agent.js: `import(BASE + '/client.js')`; `displayOf(timeline, cache)` maps answers to the renderer's messages,
+  keeping display objects per entity id (`kept`) and bumping a part's version only when a field changed (`upd`);
+  a thinking part ends when its segment finished or another part follows it.
+- Tests: Go (recording engine shows the model's turn; person wait; hb-eval against hb-server); UI (R1, R2, R4 on a
+  real server with the scripted engine; R5 and a reload in the scripted render test).
+
+### Why
+- Mapping answers to the existing display objects kept the renderer (incremental, per-part versions, open state)
+  unchanged; only its data source changed.
+- The render test makes snapshots with the page's own `Timeline` (client.js imported into Node as a data URL), so
+  its fixtures cannot drift from what the reducer accepts.
+
+### What worked
+- `go test ./...`; UI: agent (23 checks), agent-render (34), dock, replica, jobs, restart.
+- R1 on a real server: a second page opened while eval waits 2.5 s shows `reasoning,tool:running`, the same as
+  the page that watched, and the same finished answer and footer.
+
+### What didn't work
+- The first person-wait test called `host.ask` from agent code:
+  `ReferenceError: host is internal to the room; use the workbench API (bench.help())`. Only real-engine tool work
+  asks a person, so the end-to-end test was replaced by one that drives `personWait` under `toolexec.DeadlineBy`
+  (20 ms limit, 100 ms wait, states `awaiting-person`, `running`).
+- `TestTheModelGetsTheRoomsInstructionsAndContext` asserted `bench.help()` in the system prompt; the reference
+  starts with "API reference".
+- The R5 render check read the footers before the next animation frame (`["190 ms · 1.1k in / 20 out · 1 model
+  call"]`, one footer); a `frame()` before reading.
+- My first cut of `internal/evalrun/client.go` also removed the hbd job helpers between the agent functions
+  (`undefined: Job`); restored from `git show HEAD`.
+
+### What I learned
+- The contract's R3 (ids) and R5 (gaps) need no code in the page: entity ids carry the pairing, and a stream with no
+  resume cursor cannot skip events.
+
+### What was tricky to build
+- `Turn` must not miss a person wait: the stream is opened (and its first snapshot received) before the message is
+  posted; the run's id is known only from the 202, so run-end events before it are kept and a poll covers them.
+
+### What warrants a second pair of eyes
+- Conversations in `data/hb-server/agentd` are not migrated (state moves to `data/hb-server/agent`).
+- Cost is estimated on the client from `/models` prices; the record has tokens, not cost.
+
+### Code review instructions
+- homolog-bench: `internal/server/server.go` (`Agent`, `EvalTool`, `personWait`), `web/js/agent.js`
+  (`displayOf`, `answerOf`, `partOf`, `derive`, `send`), `internal/evalrun/client.go` (`Turn`, `reply`).
+- Run: `go test ./...`; `hb-server serve --address 127.0.0.1:8806 --engine fake --state-dir <tmp> --web-dir web`,
+  then `cd tests/ui && node agent.test.mjs http://127.0.0.1:8806/` and `node agent-render.test.mjs …`.
