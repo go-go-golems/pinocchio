@@ -141,6 +141,12 @@ export class Session {
     return Session.#start(base, id, out.session ?? { id }, o);
   }
 
+  /** Connects to a session the caller already has (its info from create or list): resolves after the first snapshot. */
+  static async attach(base: string, info: SessionInfo, o: Options = {}): Promise<Session> {
+    if (!info?.id) throw new ChatError("invalid_request", "attach needs the session's info with its id");
+    return Session.#start(base, info.id, info, o);
+  }
+
   /** Lists sessions that have all these labels. */
   static async list(base: string, labels: Record<string, string> = {}, o: Options = {}): Promise<SessionInfo[]> {
     const q = Object.entries(labels).map(([k, v]) => "label=" + encodeURIComponent(k + ":" + v)).join("&");
