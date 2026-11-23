@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
@@ -30,15 +31,30 @@ type ComposedRuntime struct {
 	// Registry enables Geppetto tool-loop execution for this runtime. When nil,
 	// chatapp runs a single-pass inference.
 	Registry geptools.ToolRegistry
-	// ToolExecutor optionally overrides Geppetto's default tool executor. This is
-	// the extension point used by browser/frontend tool bridges.
+	// ToolExecutor optionally overrides Geppetto's default tool executor.
 	ToolExecutor geptools.ToolExecutor
+	// WrapToolExecutor wraps the run's final executor, after chatapp's run-tools
+	// functions (e.g. browser tools) have set it up, so a wrapper such as a
+	// per-call deadline covers every tool of the run.
+	WrapToolExecutor func(next geptools.ToolExecutor) geptools.ToolExecutor
 	// WrapSink decorates an application-provided base sink with runtime-owned behavior.
 	// Both canonical evtstream chat and legacy webchat now use this to keep sink decoration
 	// owned by runtime composition while letting the application provide the transport sink.
 	WrapSink           EventSinkWrapper
 	RuntimeFingerprint string
 	RuntimeKey         string
+
+	// Loop configures the tool loop: the round limit and an optional final
+	// answer at the limit. nil uses geppetto's default (20 rounds, no final
+	// answer). The final answer's instruction block is the caller's content.
+	Loop *toolloop.LoopConfig
+	// ToolConfig configures tool execution (timeouts, parallelism, retries).
+	// nil uses geppetto's default.
+	ToolConfig *geptools.ToolConfig
+	// RoundGuard runs before every model call of a run; an error stops the run
+	// before that call. Budgets and quotas are implemented here. An error with
+	// a Code() string method fails the run with that code.
+	RoundGuard toolloop.RoundGuard
 }
 
 // RuntimeBuilder composes an engine/sink runtime for a conversation request.

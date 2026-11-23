@@ -2,7 +2,6 @@ package chatapp
 
 import (
 	"fmt"
-	"time"
 
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -16,12 +15,14 @@ type RunnerOptions struct {
 	UIFanout       sessionstream.UIFanout
 	TurnStore      chatstore.TurnStore
 	Plugins        []ChatPlugin
-	ChunkDelay     time.Duration
+	// EngineOptions are passed to NewEngine after the runner's own options
+	// (plugins, turn store), e.g. WithBusyPolicy.
+	EngineOptions []Option
 }
 
 // Runner is the reusable non-web wiring of chatapp on top of sessionstream.
 //
-// It mirrors the core setup used by cmd/web-chat/internal/appserver.Server without HTTP or
+// It mirrors the core setup used by pkg/chatapp/httpapi.Server without HTTP or
 // websocket assumptions, so CLI, RPC, and TUI adapters can share the same
 // command/event/projection/hydration pipeline.
 type Runner struct {
@@ -60,9 +61,7 @@ func NewRunner(opts RunnerOptions) (*Runner, error) {
 		WithPlugins(opts.Plugins...),
 		WithTurnStore(opts.TurnStore),
 	}
-	if opts.ChunkDelay > 0 {
-		engineOptions = append(engineOptions, WithChunkDelay(opts.ChunkDelay))
-	}
+	engineOptions = append(engineOptions, opts.EngineOptions...)
 	engine := NewEngine(engineOptions...)
 
 	hubOptions := []sessionstream.HubOption{

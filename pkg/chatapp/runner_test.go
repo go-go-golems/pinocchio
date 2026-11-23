@@ -4,10 +4,12 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
+	gepevents "github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
@@ -45,7 +47,7 @@ func (f *recordingFanout) eventNames() []string {
 
 func TestRunnerSubmitPromptWaitIdleAndSnapshot(t *testing.T) {
 	fanout := &recordingFanout{}
-	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{UIFanout: fanout, ChunkDelay: time.Nanosecond})
+	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{UIFanout: fanout})
 	if err != nil {
 		t.Fatalf("NewRunner: %v", err)
 	}
@@ -53,7 +55,7 @@ func TestRunnerSubmitPromptWaitIdleAndSnapshot(t *testing.T) {
 
 	ctx := context.Background()
 	const sid sessionstream.SessionId = "session-1"
-	if err := runner.Service.SubmitPrompt(ctx, sid, "hello runner"); err != nil {
+	if err := runner.Service.SubmitPromptRequest(ctx, sid, chatapp.PromptRequest{Prompt: "hello runner", Runtime: &infruntime.ComposedRuntime{Engine: streamingEchoEngine{}}}); err != nil {
 		t.Fatalf("SubmitPrompt: %v", err)
 	}
 	if err := runner.Service.WaitIdle(ctx, sid); err != nil {
@@ -101,4 +103,18 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// streamingEchoEngine streams "Answer: <prompt>" as one text segment.
+type streamingEchoEngine struct{}
+
+func (streamingEchoEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	text := "Answer: hello runner"
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	corr := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "segment-1"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, text, text, 1))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentFinishedEvent(meta, corr, text, "stop"))
+	turns.AppendBlock(t, turns.NewAssistantTextBlock(text))
+	return t, nil
 }

@@ -39,7 +39,8 @@ func TestMessageIDGenerationFailurePublishesNoEvents(t *testing.T) {
 	hub := newTestHub(t, engine)
 	sid := sessionstream.SessionId("chat-id-failure")
 
-	err := hub.Submit(context.Background(), sid, CommandStartInference, &chatappv1.StartInferenceCommand{Prompt: "hello"})
+	engine.setPendingRequest("request-id-failure", PromptRequest{Prompt: "hello", Runtime: answerRuntime()})
+	err := hub.Submit(context.Background(), sid, CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-id-failure"})
 	require.ErrorContains(t, err, "generate chat message ID: identity service unavailable")
 
 	snapshot, snapshotErr := hub.Snapshot(context.Background(), sid)

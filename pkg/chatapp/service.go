@@ -16,6 +16,9 @@ import (
 // PromptRequest is the app-facing prompt submission input.
 type PromptRequest struct {
 	Prompt string
+	// MessageID, when set, is the run's message id (Service.NewMessageID):
+	// the caller knows the run before any event names it. Empty: generated.
+	MessageID string
 	// Attachments are user-provided attachments (images) referenced by URL. They
 	// are echoed to clients in ChatUserMessageAccepted / ChatMessageEntity and,
 	// for image kinds, appended to the user turn block as geppetto image entries.
@@ -23,6 +26,11 @@ type PromptRequest struct {
 	Attachments    []Attachment
 	IdempotencyKey string
 	Runtime        *infruntime.ComposedRuntime
+	// Blocks are appended to the turn after the person's message, in order, for
+	// this turn only. They stay in the history afterwards (chatapp never edits
+	// blocks it has sent). Use them for caller-owned content such as a block
+	// describing the application's current state.
+	Blocks []turns.Block
 	// InitialTurn optionally seeds the Geppetto runtime with a fully rendered
 	// turn instead of appending Prompt as a new user-only turn. This is used by
 	// Pinocchio verbs whose inputs can include system prompts, pre-seeded blocks,
@@ -59,6 +67,15 @@ func NewService(hub *sessionstream.Hub, engine *Engine) (*Service, error) {
 
 func (s *Service) SubmitPrompt(ctx context.Context, sid sessionstream.SessionId, prompt string) error {
 	return s.SubmitPromptRequest(ctx, sid, PromptRequest{Prompt: prompt})
+}
+
+// NewMessageID returns a fresh run message id from the engine's generator,
+// for PromptRequest.MessageID.
+func (s *Service) NewMessageID() (string, error) {
+	if s == nil || s.engine == nil {
+		return "", fmt.Errorf("chat service is not initialized")
+	}
+	return s.engine.newMessageID()
 }
 
 func (s *Service) SubmitPromptRequest(ctx context.Context, sid sessionstream.SessionId, req PromptRequest) error {
@@ -113,6 +130,13 @@ func (s *Service) Stop(ctx context.Context, sid sessionstream.SessionId) error {
 		return fmt.Errorf("session id is empty")
 	}
 	return s.hub.Submit(ctx, sid, CommandStopInference, &chatappv1.StopInferenceCommand{})
+}
+
+// Running reports whether the session has an active run. Unlike a timeline
+// snapshot, it is exact: a run stopped before any output leaves no assistant
+// entity in the timeline.
+func (s *Service) Running(sid sessionstream.SessionId) bool {
+	return s != nil && s.engine != nil && s.engine.Running(sid)
 }
 
 func (s *Service) WaitIdle(ctx context.Context, sid sessionstream.SessionId) error {

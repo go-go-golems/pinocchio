@@ -10,6 +10,7 @@ import (
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
@@ -34,21 +35,35 @@ func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Com
 		pending.Attachments = AttachmentsFromProto(payload.GetAttachments())
 	}
 	if prompt == "" && len(pending.Attachments) == 0 {
-		prompt = "Explain evtstream"
+		return fmt.Errorf("start inference: the prompt is empty and there are no attachments")
 	}
-	messageID, err := e.newMessageID()
-	if err != nil {
-		return err
+	if pending.Runtime == nil || pending.Runtime.Engine == nil {
+		return ErrNoRuntime
 	}
-	userMessageID := messageID + userMessageIDSuffix
-	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{MessageId: userMessageID, Role: "user", Text: prompt, Content: prompt, Status: "accepted", Attachments: clientAttachmentsToProto(pending.Attachments)}); err != nil {
-		return err
+	messageID := strings.TrimSpace(pending.MessageID)
+	if messageID == "" {
+		var err error
+		if messageID, err = e.newMessageID(); err != nil {
+			return err
+		}
 	}
 	runCtx, cancel := context.WithCancel(publishContext(ctx))
 	run := &activeRun{messageID: messageID, cancel: cancel, done: make(chan struct{})}
-	if previous := e.swapRun(cmd.SessionId, run); previous != nil {
+	previous, err := e.reserveRun(cmd.SessionId, run)
+	if err != nil {
+		cancel()
+		return err
+	}
+	if previous != nil {
 		previous.cancel()
 		<-previous.done
+	}
+	userMessageID := messageID + userMessageIDSuffix
+	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{MessageId: userMessageID, Role: "user", Text: prompt, Content: prompt, Status: "accepted", Attachments: clientAttachmentsToProto(pending.Attachments)}); err != nil {
+		e.clearRun(cmd.SessionId, messageID)
+		cancel()
+		close(run.done)
+		return err
 	}
 	go e.runPrompt(runCtx, cmd.SessionId, messageID, pending, prompt, pub, run.done)
 	return nil
@@ -64,20 +79,23 @@ func (e *Engine) handleStopInference(_ context.Context, cmd sessionstream.Comman
 func (e *Engine) runPrompt(ctx context.Context, sid sessionstream.SessionId, messageID string, pending PromptRequest, prompt string, pub sessionstream.EventPublisher, done chan struct{}) {
 	defer close(done)
 	defer e.clearRun(sid, messageID)
-	if pending.Runtime != nil && pending.Runtime.Engine != nil {
-		e.runRuntimeInference(ctx, sid, messageID, prompt, pending, pub)
-		return
-	}
-	e.runDemoInference(ctx, sid, messageID, prompt, pub)
+	e.runRuntimeInference(ctx, sid, messageID, prompt, pending, pub)
 }
+
+// CodeHistoryError is the code of a run that failed because its history could
+// not be loaded or decoded.
+const CodeHistoryError = "history_error"
+
+// CodeToolsError: a RunToolsFunc failed before the run started.
+const CodeToolsError = "tools_error"
 
 func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, pending PromptRequest, pub sessionstream.EventPublisher) {
 	runtime := pending.Runtime
-	if runtime == nil || runtime.Engine == nil {
-		e.runDemoInference(ctx, sid, messageID, prompt, pub)
-		return
-	}
-	if err := e.publish(ctx, sid, pub, EventChatRunStarted, &chatappv1.ChatRunStarted{MessageId: messageID, Prompt: prompt, Correlation: runCorrelationInfo(sid, messageID)}); err != nil {
+	// ctx is the run's context and may already be cancelled (Stop, or a
+	// replacing prompt). Publishing the start and loading history use a
+	// non-cancellable context so a cancelled run still ends with ChatRunStopped
+	// and its turn is kept.
+	if err := e.publish(publishContext(ctx), sid, pub, EventChatRunStarted, &chatappv1.ChatRunStarted{MessageId: messageID, Prompt: prompt, Correlation: runCorrelationInfo(sid, messageID)}); err != nil {
 		return
 	}
 
@@ -86,14 +104,14 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if runtime.WrapSink != nil {
 		wrapped, err := runtime.WrapSink(baseSink)
 		if err != nil {
-			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeUpstreamError, err)
 			return
 		}
 		eventSink = wrapped
 	}
 	sink, ok := baseSink.(*runtimeEventSink)
 	if !ok {
-		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "internal runtime sink type assertion failed")
+		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeUpstreamError, errors.New("internal runtime sink type assertion failed"))
 		return
 	}
 	runCtx := ctx
@@ -104,34 +122,58 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		}
 	}
 
+	tools := RunTools{Registry: runtime.Registry, Executor: runtime.ToolExecutor, Config: geptools.DefaultToolConfig()}
+	if runtime.ToolConfig != nil {
+		tools.Config = *runtime.ToolConfig
+	}
+	for _, fn := range e.runTools {
+		nextCtx, nextTools, err := fn(runCtx, RunScope{SessionID: sid, MessageID: messageID, Publisher: pub}, tools)
+		if err != nil {
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeToolsError, fmt.Errorf("prepare run tools: %w", err))
+			return
+		}
+		if nextCtx != nil {
+			runCtx = nextCtx
+		}
+		nextTools.Config = tools.Config
+		tools = nextTools
+	}
+	if runtime.WrapToolExecutor != nil {
+		tools.Executor = runtime.WrapToolExecutor(tools.ExecutorOrDefault())
+	}
+
 	sess := gepsession.NewSessionWithID(string(sid))
 	sess.Builder = &enginebuilder.Builder{
-		Base:         runtime.Engine,
-		Registry:     runtime.Registry,
-		ToolExecutor: runtime.ToolExecutor,
+		// The guard wraps the engine, not the tool loop: geppetto makes a
+		// plain call without a registry, which would skip a loop's guard.
+		Base:         guardEngine(runtime.Engine, runtime.RoundGuard),
+		Registry:     tools.Registry,
+		ToolExecutor: tools.Executor,
 		EventSinks:   []gepevents.EventSink{eventSink},
+		LoopConfig:   runtime.Loop,
+		ToolConfig:   runtime.ToolConfig,
 	}
 
 	if pending.InitialTurn != nil {
 		sess.Append(pending.InitialTurn.Clone())
 	} else {
-		// Load conversation history: the last persisted turn contains the full
-		// conversation as an accumulator. AppendNewTurnFromUserPrompt will clone
-		// it and add the new user block, giving the LLM the full context.
+		// Load conversation history: the last saved turn holds the whole
+		// conversation. AppendNewTurnFromUserPrompt clones it and adds the new
+		// user block.
 		if e.turnStore != nil {
-			snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
+			snapshot, err := e.turnStore.LoadLatestTurn(publishContext(ctx), string(sid), "final")
 			if err != nil {
-				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("load conversation history: %v", err))
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeHistoryError, fmt.Errorf("load conversation history: %w", err))
 				return
 			}
 			if snapshot != nil {
 				turn, err := serde.FromYAML([]byte(snapshot.Payload))
 				if err != nil {
-					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("decode conversation history: %v", err))
+					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeHistoryError, fmt.Errorf("decode conversation history: %w", err))
 					return
 				}
 				if turn == nil {
-					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "decode conversation history: empty turn")
+					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeHistoryError, errors.New("decode conversation history: empty turn"))
 					return
 				}
 				sess.Append(turn)
@@ -145,52 +187,58 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 			_, err = sess.AppendNewTurnFromUserPrompt(prompt)
 		}
 		if err != nil {
-			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeUpstreamError, err)
 			return
+		}
+	}
+	// The caller's extra blocks for this turn (live state, instructions):
+	// appended after the person's message and never removed later.
+	if latest := sess.Latest(); latest != nil {
+		for _, b := range pending.Blocks {
+			turns.AppendBlock(latest, b)
 		}
 	}
 	assistantBlockOffset := countAssistantBlocks(sess.Latest())
+	var output *turns.Turn
 	handle, err := sess.StartInference(runCtx)
-	if err != nil {
-		e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtime.RuntimeKey, "failed", sess.Latest())
-		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
-		return
+	if err == nil {
+		output, err = handle.Wait()
 	}
-	output, err := handle.Wait()
-	if err != nil {
-		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-			if !sink.IsTerminal() {
-				if drainErr := sink.drainStreamPatches(); drainErr != nil {
-					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("flush stream patches before stop: %v", drainErr))
-					return
-				}
-				_ = sink.finishActiveTextSegment("stopped", "stopped", "")
-				_ = e.publish(publishContext(ctx), sid, pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: messageID, Status: "stopped", Correlation: runCorrelationInfo(sid, messageID)})
-			}
-			return
-		}
-		e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtime.RuntimeKey, "failed", sess.Latest())
+	final := output
+	if final == nil {
+		final = sess.Latest()
+	}
+	outcome := e.decideOutcome(ctx, err)
+	e.endRun(ctx, sid, runtime.RuntimeKey, pending, final)
+
+	switch outcome.kind {
+	case outcomeStopped:
 		if !sink.IsTerminal() {
 			if drainErr := sink.drainStreamPatches(); drainErr != nil {
-				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("flush stream patches before failure: %v", drainErr))
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeUpstreamError, fmt.Errorf("flush stream patches before stop: %w", drainErr))
+				return
+			}
+			_ = sink.finishActiveTextSegment("stopped", "stopped", "")
+			_ = e.publish(publishContext(ctx), sid, pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: messageID, Status: "stopped", Correlation: runCorrelationInfo(sid, messageID)})
+		}
+		return
+	case outcomeFailed:
+		if !sink.IsTerminal() {
+			if drainErr := sink.drainStreamPatches(); drainErr != nil {
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeUpstreamError, fmt.Errorf("flush stream patches before failure: %w", drainErr))
 				return
 			}
 			_ = sink.finishActiveTextSegment("failed", "error", "")
-			if isMaxIterationsError(err) {
-				_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: runtimeWarningMessageID(messageID), Role: "warning", Prompt: prompt, Text: maxIterationsWarningText(err), Content: maxIterationsWarningText(err), Status: "finished", Streaming: false, Final: true})
-			}
-			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, outcome.code, err)
 		}
 		return
-	}
-	if pending.OnFinalTurn != nil && output != nil {
-		pending.OnFinalTurn(output.Clone())
+	case outcomeFinished:
 	}
 	if sink.IsTerminal() {
 		return
 	}
 	if drainErr := sink.drainStreamPatches(); drainErr != nil {
-		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("flush stream patches before finish: %v", drainErr))
+		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeUpstreamError, fmt.Errorf("flush stream patches before finish: %w", drainErr))
 		return
 	}
 	if sink.HasActiveTextSegment() {
@@ -198,7 +246,21 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	} else if !sink.HasTextSegment() {
 		_ = e.publishFallbackAssistantText(publishContext(ctx), sid, pub, messageID, prompt, output, assistantBlockOffset)
 	}
-	_ = e.publish(publishContext(ctx), sid, pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: messageID, Status: "finished", Correlation: runCorrelationInfo(sid, messageID)})
+	_ = e.publish(publishContext(ctx), sid, pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: messageID, Status: "finished", Correlation: runCorrelationInfo(sid, messageID), Truncated: outcome.truncated, Reason: outcome.reason})
+}
+
+// endRun keeps the run's turn as the conversation, whatever the outcome:
+// unanswered tool calls are closed, the turn is saved as "final" when the
+// engine has a turn store, and OnFinalTurn receives it.
+func (e *Engine) endRun(ctx context.Context, sid sessionstream.SessionId, runtimeKey string, pending PromptRequest, t *turns.Turn) {
+	if t == nil {
+		return
+	}
+	closeUnansweredToolCalls(t, e.unansweredToolResult)
+	e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtimeKey, "final", t)
+	if pending.OnFinalTurn != nil {
+		pending.OnFinalTurn(t.Clone())
+	}
 }
 
 func publishContext(ctx context.Context) context.Context {
@@ -286,20 +348,23 @@ func (e *Engine) persistRuntimeTurnSnapshot(ctx context.Context, sid sessionstre
 	}
 	payload, err := serde.ToYAML(t, serde.Options{})
 	if err != nil {
+		log.Warn().Err(err).Str("session", string(sid)).Msg("chatapp: encode conversation turn")
 		return
 	}
 	inferenceID := ""
 	if v, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
 		inferenceID = strings.TrimSpace(v)
 	}
-	_ = e.turnStore.Save(ctx, string(sid), string(sid), turnID, phase, time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{
+	if err := e.turnStore.Save(ctx, string(sid), string(sid), turnID, phase, time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{
 		RuntimeKey:  runtimeKey,
 		InferenceID: inferenceID,
-	})
+	}); err != nil {
+		log.Warn().Err(err).Str("session", string(sid)).Str("phase", phase).Msg("chatapp: save conversation turn")
+	}
 }
 
-func (e *Engine) publishRunFailed(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, errText string) {
-	_ = e.publish(ctx, sid, pub, EventChatRunFailed, &chatappv1.ChatRunFailed{MessageId: messageID, Status: "failed", Error: errText, Correlation: runCorrelationInfo(sid, messageID)})
+func (e *Engine) publishRunFailed(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, code string, err error) {
+	_ = e.publish(ctx, sid, pub, EventChatRunFailed, &chatappv1.ChatRunFailed{MessageId: messageID, Status: "failed", Code: code, Error: e.failureText(code, err), Correlation: runCorrelationInfo(sid, messageID)})
 }
 
 func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload proto.Message) error {

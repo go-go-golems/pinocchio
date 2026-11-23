@@ -8,29 +8,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func runtimeWarningMessageID(messageID string) string {
-	messageID = strings.TrimSpace(messageID)
-	if messageID == "" {
-		return "chat-warning"
-	}
-	return messageID + warningMessageIDSuffix
-}
-
-func isMaxIterationsError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(err.Error()), "max iterations")
-}
-
-func maxIterationsWarningText(err error) string {
-	message := "tool loop reached the maximum iteration limit"
-	if err != nil && strings.TrimSpace(err.Error()) != "" {
-		message = strings.TrimSpace(err.Error())
-	}
-	return "Warning: inference stopped because " + message + ". The answer may be incomplete; try narrowing the request or increasing the max-iterations setting."
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {

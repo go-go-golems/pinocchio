@@ -27,7 +27,7 @@ func TestPluginProjectsFrontendToolTimeline(t *testing.T) {
 		t.Fatalf("unexpected request payload: %#v", entities[0].Payload)
 	}
 
-	result, err := structpb.NewStruct(map[string]any{"ok": true})
+	result, err := structpb.NewValue(map[string]any{"ok": true})
 	if err != nil {
 		t.Fatalf("result struct: %v", err)
 	}

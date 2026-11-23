@@ -75,7 +75,7 @@ and the attachments are empty. Attachments are echoed in `ChatUserMessageAccepte
 and projected into `ChatMessageEntity.attachments`, and image attachments are
 appended to the geppetto user block via `session.AppendNewTurnFromUserMessage`
 (see `chatapp.AttachmentsToTurnImages`). Applications that own an upload endpoint
-resolve `serverkit.SubmitMessageRequest.Attachments` (ids) into `chatapp.Attachment`
+resolve `httpapi.MessageRequest.Attachments` (ids) into `chatapp.Attachment`
 values; `Attachment.Metadata["turn_url"]` may override the URL placed into the turn
 when the runtime resolves images itself.
 

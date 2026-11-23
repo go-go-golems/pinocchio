@@ -3,7 +3,6 @@ package chatapp
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
@@ -42,7 +41,7 @@ func TestAttachmentsProtoRoundTrip(t *testing.T) {
 }
 
 func TestServiceSubmitPromptRequestAllowsAttachmentsWithoutPrompt(t *testing.T) {
-	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	engine := NewEngine()
 	hub := newTestHub(t, engine)
 	svc, err := NewService(hub, engine)
 	require.NoError(t, err)
@@ -51,7 +50,7 @@ func TestServiceSubmitPromptRequestAllowsAttachmentsWithoutPrompt(t *testing.T) 
 	require.Error(t, err, "neither prompt nor attachments")
 
 	att := Attachment{ID: "att-1", Kind: "image", MediaType: "image/png", URL: "https://example.com/a.png", Width: 10, Height: 20}
-	require.NoError(t, svc.SubmitPromptRequest(context.Background(), sessionstream.SessionId("svc-att-1"), PromptRequest{Attachments: []Attachment{att}}))
+	require.NoError(t, svc.SubmitPromptRequest(context.Background(), sessionstream.SessionId("svc-att-1"), PromptRequest{Attachments: []Attachment{att}, Runtime: answerRuntime()}))
 	require.NoError(t, svc.WaitIdle(context.Background(), sessionstream.SessionId("svc-att-1")))
 
 	snap, err := svc.Snapshot(context.Background(), sessionstream.SessionId("svc-att-1"))
@@ -73,7 +72,7 @@ func TestServiceSubmitPromptRequestAllowsAttachmentsWithoutPrompt(t *testing.T) 
 func TestRuntimeInferenceAppendsMultimodalUserBlockForAttachments(t *testing.T) {
 	ctx := context.Background()
 	recorder := &recordingHistoryEngine{}
-	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	engine := NewEngine()
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-att", PromptRequest{
 		Prompt:      "what coin is this?",
@@ -110,11 +109,13 @@ func TestRuntimeInferenceAppendsMultimodalUserBlockForAttachments(t *testing.T) 
 }
 
 func TestHandleStartInferenceFallsBackToWireAttachments(t *testing.T) {
-	// No pending request registered: attachments must be reconstructed from the command payload.
+	// The pending request carries the runtime but no attachments: attachments
+	// must be reconstructed from the command payload.
 	ctx := context.Background()
-	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	engine := NewEngine()
 	hub := newTestHub(t, engine)
-	cmd := &chatappv1.StartInferenceCommand{RequestId: "unknown", Attachments: []*chatappv1.ChatAttachment{{AttachmentId: "w-1", Kind: "image", MediaType: "image/png", Url: "https://example.com/w.png"}}}
+	engine.setPendingRequest("wire-attachments", PromptRequest{Runtime: answerRuntime()})
+	cmd := &chatappv1.StartInferenceCommand{RequestId: "wire-attachments", Attachments: []*chatappv1.ChatAttachment{{AttachmentId: "w-1", Kind: "image", MediaType: "image/png", Url: "https://example.com/w.png"}}}
 	require.NoError(t, hub.Submit(ctx, sessionstream.SessionId("chat-wire"), CommandStartInference, cmd))
 	require.NoError(t, engine.WaitIdle(ctx, sessionstream.SessionId("chat-wire")))
 	svc, err := NewService(hub, engine)

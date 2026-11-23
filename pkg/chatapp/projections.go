@@ -47,11 +47,24 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		}
 		entity.Text = entity.Content
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
+	case *chatappv1.ChatRunStarted:
+		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) {
+			r.Status, r.Prompt = "running", payload.GetPrompt()
+		}), nil
+	case *chatappv1.ChatRunFinished:
+		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) {
+			r.Status, r.Truncated, r.Reason = "finished", payload.GetTruncated(), payload.GetReason()
+		}), nil
+	case *chatappv1.ChatRunStopped:
+		return runEntity(view, payload.GetMessageId(), func(r *chatappv1.ChatRunEntity) { r.Status = "stopped" }), nil
 	case *chatappv1.ChatRunFailed:
 		messageID := strings.TrimSpace(payload.GetMessageId())
 		if messageID == "" {
 			return nil, nil
 		}
+		run := runEntity(view, messageID, func(r *chatappv1.ChatRunEntity) {
+			r.Status, r.Code, r.Error = "failed", payload.GetCode(), payload.GetError()
+		})
 		content := firstNonEmpty(payload.GetError(), "Chat run failed")
 		entity := &chatappv1.ChatMessageEntity{
 			MessageId:   messageID,
@@ -63,7 +76,7 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 			Final:       true,
 			Correlation: payload.GetCorrelation(),
 		}
-		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
+		return append(run, sessionstream.TimelineEntity{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}), nil
 	case *chatappv1.ChatTextSegmentStarted:
 		messageID := strings.TrimSpace(payload.GetMessageId())
 		if messageID == "" {
@@ -129,6 +142,22 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 	default:
 		return nil, nil
 	}
+}
+
+// runEntity is the run's entity after fn, starting from its current state.
+func runEntity(view sessionstream.TimelineView, messageID string, fn func(*chatappv1.ChatRunEntity)) []sessionstream.TimelineEntity {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	run := &chatappv1.ChatRunEntity{MessageId: messageID}
+	if e, ok := view.Get(TimelineEntityChatRun, messageID); ok && e.Payload != nil {
+		if pb, ok := e.Payload.(*chatappv1.ChatRunEntity); ok && pb != nil {
+			run = proto.Clone(pb).(*chatappv1.ChatRunEntity)
+		}
+	}
+	fn(run)
+	return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatRun, Id: messageID, Payload: run}}
 }
 
 func parentMessageIDFromSegmentMessageID(messageID string) string {

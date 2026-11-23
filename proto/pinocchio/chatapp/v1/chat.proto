@@ -58,6 +58,11 @@ message ChatRunFinished {
   string error = 3;
   optional int64 duration_ms = 4;
   CorrelationInfo correlation = 5;
+  // truncated is true when the run hit its round limit and the model gave the
+  // final answer with tools disabled (geppetto toolloop FinalAnswer).
+  bool truncated = 6;
+  // reason says why a truncated run ended, e.g. "max_rounds".
+  string reason = 7;
 }
 
 message ChatRunStopped {
@@ -72,6 +77,10 @@ message ChatRunFailed {
   string status = 2;
   string error = 3;
   CorrelationInfo correlation = 4;
+  // code is a stable machine-readable failure class: max_rounds,
+  // authentication_error, rate_limited, prompt_too_large, upstream_error, or a
+  // code supplied by the caller's error (an error with a Code() string method).
+  string code = 5;
 }
 
 message ChatProviderCallStarted {
@@ -275,6 +284,23 @@ message ChatUserMessageAccepted {
   string content = 5;
   string status = 6;
   repeated ChatAttachment attachments = 7;
+}
+
+// ChatRunEntity is a run's lifecycle in the timeline, so a snapshot holds
+// every run's outcome (a client that missed the terminal event, or a run
+// stopped before any output, is still visible). Its id is the run's message
+// id.
+message ChatRunEntity {
+  string message_id = 1;
+  // running, finished, failed or stopped
+  string status = 2;
+  string prompt = 3;
+  // failed: ChatRunFailed.code; error: the failure's text
+  string code = 4;
+  string error = 5;
+  // finished at the round limit with a final answer (ChatRunFinished)
+  bool truncated = 6;
+  string reason = 7;
 }
 
 message ChatMessageEntity {

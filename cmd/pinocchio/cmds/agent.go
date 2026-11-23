@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -24,17 +23,21 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
-	"github.com/go-go-golems/pinocchio/pkg/agentd"
-	"github.com/go-go-golems/pinocchio/pkg/agentd/agentcli"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/agentserver"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/toolkit/presets"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/toolkit/scripted"
 	pinocchiocmds "github.com/go-go-golems/pinocchio/pkg/cmds"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/agentcli"
 	"github.com/spf13/cobra"
 )
 
 type agentServeSettings struct {
-	Address  string `glazed:"address"`
-	Agents   string `glazed:"agents"`
-	StateDir string `glazed:"state-dir"`
-	Engine   string `glazed:"engine"`
+	Address       string `glazed:"address"`
+	Presets       string `glazed:"presets"`
+	DefaultPreset string `glazed:"default-preset"`
+	StateDir      string `glazed:"state-dir"`
+	Prefix        string `glazed:"prefix"`
+	Engine        string `glazed:"engine"`
 }
 
 // agentMiddlewares is pinocchio's standard chain (flags, args, PINOCCHIO_*
@@ -71,33 +74,42 @@ func NewAgentServeCommand() (*AgentServeCommand, error) {
 	return &AgentServeCommand{CommandDescription: cmds.NewCommandDescription(
 		"serve",
 		cmds.WithShort("Serve the agent HTTP API (sessions, SSE events, browser-executed tools)"),
-		cmds.WithLong(`Start the agent service. A page creates a session for an agent, registers
-the tools it implements, sends turns and reads events over SSE; when the
-model calls a tool, the service asks the page to run it and waits for the
-result. The model loop and the conversation stay in the service.
+		cmds.WithLong(`Start the agent service: pinocchio's chat HTTP API (pkg/chatapp/httpapi)
+with one preset per session. A page creates a session, registers the tools it
+implements, sends messages and reads events over SSE; when the model calls a
+tool, the service asks the page to run it and waits for the result. The model
+loop and the conversation stay in the service.
 
-Agents are YAML files in --agents (name, systemPrompt, model, limits, tool
-approval modes). Models come from engine profiles and Pi's agent directory
+Presets are YAML files in --presets (name, systemPrompt, model, thinking,
+maxTokens, maxRounds, toolTimeout, resultCut, budget.tokensPerSession,
+pageInstructions). Models come from engine profiles and Pi's agent directory
 (see 'pinocchio help geppetto-model-sources'); credentials never reach the page.
+See 'pinocchio help pinocchio-agent-serve' for the API.
 
 The service listens on 127.0.0.1 by default and has no authentication of its
 own; put the application's own server in front of it (same origin).
 
-  GET  /v1/health · /v1/agents · /v1/models · /v1/sessions
-  POST /v1/sessions                            {agent, model?, thinking?, instructions?}
-  GET  /v1/sessions/{id}                       conversation for hydration
-  POST /v1/sessions/{id}/tools/manifest        {revision, clientInstanceId, connectionId, tools}
-  POST /v1/sessions/{id}/turns                 {text, context?}
-  GET  /v1/sessions/{id}/events                SSE; Last-Event-ID or ?after= resumes
-  POST /v1/sessions/{id}/tools/{callId}/result {status, value, error?, executor}
-  POST /v1/sessions/{id}/cancel`),
+  GET    /v1/health · /v1/presets · /v1/models
+  GET    /v1/sessions?label=k:v                 sessions with running
+  POST   /v1/sessions                           {labels: {preset?, model?, thinking?}, title?, data: {instructions?}}
+  GET    /v1/sessions/{id}                      metadata, running, timeline snapshot
+  DELETE /v1/sessions/{id}
+  POST   /v1/sessions/{id}/tools/manifest       {revision, clientInstanceId, connectionId, tools}
+  POST   /v1/sessions/{id}/messages             {prompt} -> 202; 409 run_active
+  GET    /v1/sessions/{id}/events               SSE: snapshot, then ui events
+  POST   /v1/sessions/{id}/tools/results        {toolCallId, toolName, status, result, error?, executor}
+  POST   /v1/sessions/{id}/stop`),
 		cmds.WithFlags(
 			fields.New("address", fields.TypeString, fields.WithDefault("127.0.0.1:8790"),
 				fields.WithHelp("Address to listen on")),
-			fields.New("agents", fields.TypeString, fields.WithRequired(true),
-				fields.WithHelp("Directory of agent YAML files")),
+			fields.New("presets", fields.TypeString, fields.WithRequired(true),
+				fields.WithHelp("Directory of preset YAML files")),
+			fields.New("default-preset", fields.TypeString,
+				fields.WithHelp("Preset of sessions created without one (default: the only preset)")),
 			fields.New("state-dir", fields.TypeString,
-				fields.WithHelp("Directory for saved sessions (default ~/.local/state/pinocchio/agentd)")),
+				fields.WithHelp("Directory for sessions, conversations and timelines (default ~/.local/state/pinocchio/agent)")),
+			fields.New("prefix", fields.TypeString, fields.WithDefault(agentserver.DefaultPrefix),
+				fields.WithHelp("Path prefix of the API")),
 			fields.New("engine", fields.TypeChoice, fields.WithChoices("models", "fake"), fields.WithDefault("models"),
 				fields.WithHelp("models: resolve each session's model; fake: scripted test engine")),
 		),
@@ -110,7 +122,7 @@ func defaultStateDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("no home directory; pass --state-dir: %w", err)
 	}
-	return filepath.Join(home, ".local", "state", "pinocchio", "agentd"), nil
+	return filepath.Join(home, ".local", "state", "pinocchio", "agent"), nil
 }
 
 // Run starts the service and blocks until the context ends or SIGINT/SIGTERM.
@@ -119,7 +131,7 @@ func (c *AgentServeCommand) Run(ctx context.Context, parsed *values.Values) erro
 	if err := parsed.DecodeSectionInto(schema.DefaultSlug, s); err != nil {
 		return fmt.Errorf("decode agent serve settings: %w", err)
 	}
-	agents, err := agentd.LoadAgents(s.Agents)
+	ps, err := presets.Load(s.Presets)
 	if err != nil {
 		return err
 	}
@@ -129,15 +141,13 @@ func (c *AgentServeCommand) Run(ctx context.Context, parsed *values.Values) erro
 			return err
 		}
 	}
-	store, err := agentd.NewStore(dir)
-	if err != nil {
-		return err
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("state directory: %w", err)
 	}
-	opts := agentd.Options{Agents: agents, Store: store}
+	opts := []agentserver.Option{agentserver.WithStateDir(dir), agentserver.WithDefaultPreset(s.DefaultPreset), agentserver.WithPrefix(s.Prefix)}
 	switch s.Engine {
 	case "fake":
-		opts.Engine = func() (engine.Engine, error) { return &agentd.FakeEngine{Delay: 15 * time.Millisecond}, nil }
-		opts.EngineModel = agentd.FakeModel
+		opts = append(opts, agentserver.WithEngine(scripted.Model, func() (engine.Engine, error) { return &scripted.Engine{Delay: 15 * time.Millisecond}, nil }))
 	default:
 		lo, err := agentcli.DecodeModelOptions(parsed)
 		if err != nil {
@@ -148,12 +158,13 @@ func (c *AgentServeCommand) Run(ctx context.Context, parsed *values.Values) erro
 			return err
 		}
 		defer func() { _ = set.Close() }()
-		opts.Models = set
+		opts = append(opts, agentserver.WithModels(set))
 	}
-	srv, err := agentd.NewServer(ctx, opts)
+	srv, err := agentserver.New(ps, opts...)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = srv.Close() }()
 	ln, err := net.Listen("tcp", s.Address)
 	if err != nil {
 		return err
@@ -161,18 +172,13 @@ func (c *AgentServeCommand) Run(ctx context.Context, parsed *values.Values) erro
 	if host, _, _ := net.SplitHostPort(s.Address); host == "" || host == "0.0.0.0" || host == "::" {
 		log.Warn().Str("address", s.Address).Msg("agent service is listening on all interfaces; it has no authentication of its own")
 	}
-	names := make([]string, 0, len(agents))
-	for n := range agents {
-		names = append(names, n)
-	}
-	sort.Strings(names)
 	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
-	_, _ = fmt.Fprintf(os.Stderr, "agent service on http://%s · agents: %s · sessions in %s · engine: %s\n", ln.Addr(), strings.Join(names, ", "), dir, s.Engine)
+	_, _ = fmt.Fprintf(os.Stderr, "agent service on http://%s%s · presets: %s · state in %s · engine: %s\n", ln.Addr(), s.Prefix, strings.Join(presets.Names(ps), ", "), dir, s.Engine)
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
 		<-sig.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second) // ctx may already be done
 		defer cancel()
 		_ = hs.Shutdown(sctx)
 	}()

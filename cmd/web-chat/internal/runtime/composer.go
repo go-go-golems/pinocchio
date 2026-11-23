@@ -118,7 +118,6 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	builder := &enginebuilder.Builder{Base: baseEngine, Middlewares: middlewares}
 	if c.turnStore != nil && strings.TrimSpace(req.ConvID) != "" {
 		sessionID := strings.TrimSpace(req.ConvID)
-		builder.Persister = newTurnStorePersister(c.turnStore, sessionID, runtimeKey, "final")
 		builder.SnapshotHook = newTurnSnapshotHook(sessionID, runtimeKey, c.turnStore)
 	}
 	eng, err := builder.Build(ctx, req.ConvID)

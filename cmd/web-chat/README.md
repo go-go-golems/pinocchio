@@ -36,9 +36,8 @@ The backend is deliberately organized as a command-owned application under `cmd/
 - `main.go` — thin executable/Glazed/Cobra entrypoint. It embeds `static/`, declares command flags/sections, and delegates execution to `internal/webchatcmd`.
 - `gen_frontend.go` — `go generate` hook that builds the React frontend into `static/dist`.
 - `static/` — embedded frontend assets used by the production single-binary path.
-- `internal/webchatcmd/` — command composition root: decodes server settings, resolves profiles, builds middleware/runtime/appserver dependencies, and starts HTTP serving.
+- `internal/webchatcmd/` — command composition root: decodes server settings, resolves profiles, builds middleware/runtime dependencies and the `pkg/chatapp/httpapi` server, and starts HTTP serving.
 - `internal/webapp/` — browser HTTP shell: `app-config.js`, static assets, SPA fallback, root-prefix mounting, and HTTP server lifecycle.
-- `internal/appserver/` — chat HTTP adapter: session routes, WebSocket route, export routes, frontend-tool manifest/result routes, hydration store setup, snapshots, and server construction.
 - `internal/profiles/` — app-owned profile APIs and request/profile resolution helpers.
 - `internal/runtime/` — Geppetto runtime composer, canonical runtime resolver, turn persistence, and agent-mode sink wrapper.
 - `internal/middlewaredefs/` — web-chat middleware definition catalog, currently including the agent-mode middleware definition.
@@ -50,9 +49,16 @@ The backend is deliberately organized as a command-owned application under `cmd/
 
 Canonical live routes:
 
+The chat routes come from `pkg/chatapp/httpapi` (`httpapi.Server.Register`), with
+session auto-creation on, because the frontend reuses a stored session id:
+
 - `POST /api/chat/sessions`
-- `POST /api/chat/sessions/{sessionId}/messages`
-- `GET /api/chat/sessions/{sessionId}`
+- `GET /api/chat/sessions`
+- `POST /api/chat/sessions/{sessionId}/messages` (202; 409 `run_active` while a run is active)
+- `POST /api/chat/sessions/{sessionId}/stop`
+- `GET /api/chat/sessions/{sessionId}` (metadata, `running`, snapshot)
+- `DELETE /api/chat/sessions/{sessionId}`
+- `GET /api/chat/sessions/{sessionId}/events` (server-sent events)
 - `GET /api/chat/sessions/{sessionId}/timeline`
 - `GET /api/chat/sessions/{sessionId}/turns`
 - `GET /api/chat/sessions/{sessionId}/export`

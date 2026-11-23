@@ -2,10 +2,12 @@ package chatapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -41,6 +43,7 @@ const (
 	EventChatToolCallFinished            = "ChatToolCallFinished"
 
 	TimelineEntityChatMessage = "ChatMessage"
+	TimelineEntityChatRun     = "ChatRun"
 )
 
 type Hooks struct {
@@ -56,28 +59,146 @@ type Option func(*Engine)
 type MessageIDGenerator func() (string, error)
 
 type Engine struct {
-	mu                  sync.Mutex
-	messageIDGenerator  MessageIDGenerator
-	active              map[sessionstream.SessionId]*activeRun
-	pending             map[string]PromptRequest
-	chunkDelay          time.Duration
-	hooks               Hooks
-	features            []ChatPlugin
-	turnStore           chatstore.TurnStore
-	streamPatchBatch    StreamPatchBatchConfig
-	uiEventTransformers []UIEventTransformer
+	mu                   sync.Mutex
+	messageIDGenerator   MessageIDGenerator
+	active               map[sessionstream.SessionId]*activeRun
+	pending              map[string]PromptRequest
+	hooks                Hooks
+	features             []ChatPlugin
+	turnStore            chatstore.TurnStore
+	streamPatchBatch     StreamPatchBatchConfig
+	uiEventTransformers  []UIEventTransformer
+	busyPolicy           BusyPolicy
+	classifyError        func(error) string
+	errorText            func(code string, err error) string
+	unansweredToolResult string
+	usageObserver        UsageObserver
+	runTools             []RunToolsFunc
+}
+
+// RunScope identifies the run a RunToolsFunc prepares.
+type RunScope struct {
+	SessionID sessionstream.SessionId
+	MessageID string
+	// Publisher publishes into the session's event stream for this run.
+	Publisher sessionstream.EventPublisher
+}
+
+// RunTools is the tool setup of one run: the registry the model sees and the
+// executor that runs its calls. A nil Registry means a single model call
+// without tools; a nil Executor means geppetto's default executor built from
+// Config. Config is the run's tool configuration (the runtime's ToolConfig or
+// geppetto's default); changing it has no effect.
+type RunTools struct {
+	Registry geptools.ToolRegistry
+	Executor geptools.ToolExecutor
+	Config   geptools.ToolConfig
+}
+
+// ExecutorOrDefault is Executor, or the executor geppetto would use for a nil
+// one. Wrap this, not Executor, so a wrapper keeps the run's tool config.
+func (t RunTools) ExecutorOrDefault() geptools.ToolExecutor {
+	if t.Executor != nil {
+		return t.Executor
+	}
+	return geptools.NewDefaultToolExecutor(t.Config)
+}
+
+// RunToolsFunc adjusts the tools of one run before it starts. It receives the
+// runtime's registry and executor (or what earlier functions returned) and
+// returns the ones to use, plus the run's context (e.g. with values the
+// executor needs). It must not modify the registry it receives: the runtime's
+// registry is shared between runs; clone it to add tools. An error fails the
+// run with code "tools_error".
+type RunToolsFunc func(ctx context.Context, run RunScope, tools RunTools) (context.Context, RunTools, error)
+
+// WithRunTools adds functions that adjust every run's tools, applied in
+// order. frontendtools.Manager.RunTools gives runs the page's browser tools.
+func WithRunTools(fns ...RunToolsFunc) Option {
+	return func(e *Engine) {
+		for _, fn := range fns {
+			if fn != nil {
+				e.runTools = append(e.runTools, fn)
+			}
+		}
+	}
+}
+
+// UsageObserver receives the token usage of every finished provider call of a
+// run, before chatapp publishes ChatProviderCallFinished. geppetto calls event
+// sinks inline, so an observer's effect (e.g. a session's usage total) is
+// visible to the run's RoundGuard before the next model call.
+type UsageObserver func(ctx context.Context, sid sessionstream.SessionId, usage *chatappv1.UsageInfo)
+
+// WithUsageObserver sets the usage observer (see sessions.RecordUsage).
+func WithUsageObserver(fn UsageObserver) Option {
+	return func(e *Engine) {
+		e.usageObserver = fn
+	}
+}
+
+// BusyPolicy decides what happens when a prompt arrives for a session whose
+// previous run has not ended.
+type BusyPolicy int
+
+const (
+	// BusyReject refuses the new prompt with ErrRunActive. Nothing is published.
+	BusyReject BusyPolicy = iota
+	// BusyReplace cancels the running turn, waits for it to end, and starts the
+	// new one.
+	BusyReplace
+)
+
+// ErrRunActive is returned (through Service.SubmitPromptRequest) when a prompt
+// arrives for a busy session under BusyReject.
+var ErrRunActive = errors.New("chatapp: a run is already active in this session")
+
+// ErrNoRuntime is returned when a prompt arrives without a runtime engine.
+var ErrNoRuntime = errors.New("chatapp: the prompt request has no runtime engine")
+
+// DefaultUnansweredToolResult is the error recorded for a tool call that had
+// no result when its run ended (see WithUnansweredToolResult).
+const DefaultUnansweredToolResult = "not run: the turn ended before this tool call finished"
+
+// WithBusyPolicy sets the policy for prompts that arrive while a run is
+// active. The default is BusyReject.
+func WithBusyPolicy(p BusyPolicy) Option {
+	return func(e *Engine) {
+		e.busyPolicy = p
+	}
+}
+
+// WithErrorClassifier replaces the function that maps a failed run's error to
+// the code published in ChatRunFailed.code. Errors with a Code() string method
+// and round-limit errors are classified before this function is called.
+func WithErrorClassifier(fn func(error) string) Option {
+	return func(e *Engine) {
+		e.classifyError = fn
+	}
+}
+
+// WithErrorText replaces the error text published in ChatRunFailed.error. The
+// default publishes err.Error(); applications that expose events to untrusted
+// clients should replace provider text here.
+func WithErrorText(fn func(code string, err error) string) Option {
+	return func(e *Engine) {
+		e.errorText = fn
+	}
+}
+
+// WithUnansweredToolResult sets the error text recorded in the history for a
+// tool call that had no result when its run ended. Closing such calls keeps the
+// next provider request valid. The default is DefaultUnansweredToolResult.
+func WithUnansweredToolResult(text string) Option {
+	return func(e *Engine) {
+		e.unansweredToolResult = text
+	}
 }
 
 type activeRun struct {
 	messageID string
 	cancel    context.CancelFunc
 	done      chan struct{}
-}
-
-func WithChunkDelay(delay time.Duration) Option {
-	return func(e *Engine) {
-		e.chunkDelay = delay
-	}
 }
 
 // WithMessageIDGenerator overrides root message ID generation. It is primarily
@@ -133,10 +254,11 @@ func WithTurnStore(ts chatstore.TurnStore) Option {
 
 func NewEngine(opts ...Option) *Engine {
 	engine := &Engine{
-		active:             map[sessionstream.SessionId]*activeRun{},
-		pending:            map[string]PromptRequest{},
-		chunkDelay:         20 * time.Millisecond,
-		messageIDGenerator: defaultMessageIDGenerator,
+		active:               map[sessionstream.SessionId]*activeRun{},
+		pending:              map[string]PromptRequest{},
+		messageIDGenerator:   defaultMessageIDGenerator,
+		busyPolicy:           BusyReject,
+		unansweredToolResult: DefaultUnansweredToolResult,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -176,6 +298,7 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterUIEvent(UIEventChatToolArgumentsDelta, &chatappv1.ChatToolArgumentsDelta{}),
 		reg.RegisterUIEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
+		reg.RegisterTimelineEntity(TimelineEntityChatRun, &chatappv1.ChatRunEntity{}),
 	} {
 		if err != nil {
 			return err
@@ -214,6 +337,11 @@ func Install(hub *sessionstream.Hub, engine *Engine) error {
 	return nil
 }
 
+// Running reports whether the session has an active run.
+func (e *Engine) Running(sid sessionstream.SessionId) bool {
+	return e.currentRun(sid) != nil
+}
+
 func (e *Engine) WaitIdle(ctx context.Context, sid sessionstream.SessionId) error {
 	for {
 		run := e.currentRun(sid)
@@ -228,12 +356,18 @@ func (e *Engine) WaitIdle(ctx context.Context, sid sessionstream.SessionId) erro
 	}
 }
 
-func (e *Engine) swapRun(sid sessionstream.SessionId, run *activeRun) *activeRun {
+// reserveRun makes run the session's active run. Under BusyReject it refuses
+// when another run is active; under BusyReplace it returns the run it replaced,
+// which the caller cancels and waits for.
+func (e *Engine) reserveRun(sid sessionstream.SessionId, run *activeRun) (*activeRun, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	prev := e.active[sid]
+	if prev != nil && e.busyPolicy == BusyReject {
+		return nil, ErrRunActive
+	}
 	e.active[sid] = run
-	return prev
+	return prev, nil
 }
 
 func (e *Engine) currentRun(sid sessionstream.SessionId) *activeRun {

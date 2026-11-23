@@ -12,10 +12,11 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -157,14 +158,15 @@ func TestReasoningChatFeatureServerSnapshotAndUIEvents(t *testing.T) {
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-reasoning-1/messages", "application/json", bytes.NewReader([]byte(`{"prompt":"Show your reasoning summary"}`)))
 	require.NoError(t, err)
 	_ = resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		snapResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-reasoning-1")
 		require.NoError(t, err)
-		var snap appserver.SessionSnapshotResponse
-		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
+		var got httpapi.SessionResponse
+		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&got))
+		snap := got.Snapshot
 		_ = snapResp.Body.Close()
 		roles := map[string]map[string]any{}
 		for _, entity := range snap.Entities {
@@ -209,27 +211,19 @@ func (reasoningRuntimeTestEngine) RunInference(ctx context.Context, t *turns.Tur
 
 type reasoningRuntimeResolver struct{}
 
-func (reasoningRuntimeResolver) Resolve(context.Context, *http.Request, string, string, string) (*infruntime.ComposedRuntime, error) {
+func (reasoningRuntimeResolver) Resolve(context.Context, *http.Request, sessions.Info, httpapi.MessageRequest) (*infruntime.ComposedRuntime, error) {
 	return &infruntime.ComposedRuntime{Engine: reasoningRuntimeTestEngine{}}, nil
 }
 
-func newReasoningTestMux(t *testing.T) (*appserver.Server, *httptest.Server) {
+func newReasoningTestMux(t *testing.T) (*httpapi.Server, *httptest.Server) {
 	t.Helper()
-	srv, err := appserver.NewServer(
-		appserver.WithDefaultProfile("gpt-5-low"),
-		appserver.WithChunkDelay(time.Millisecond),
-		appserver.WithRuntimeResolver(reasoningRuntimeResolver{}),
-		appserver.WithChatPlugins(plugins.NewReasoningPlugin()),
+	srv, err := httpapi.New(
+		httpapi.WithAutoCreateSessions(true),
+		httpapi.WithRuntimeResolver(reasoningRuntimeResolver{}),
+		httpapi.WithChatPlugins(plugins.NewReasoningPlugin()),
 	)
 	require.NoError(t, err)
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/chat/sessions", srv.HandleCreateSession)
-	mux.HandleFunc("/api/chat/sessions/", srv.HandleSessionRoutes)
-	mux.HandleFunc("/api/chat/ws", srv.HandleWS)
-
-	httpSrv := httptest.NewServer(mux)
-	return srv, httpSrv
+	return srv, httptest.NewServer(srv.Handler())
 }
 
 type reasoningStaticTimelineView struct {

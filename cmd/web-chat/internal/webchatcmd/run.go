@@ -9,13 +9,13 @@ import (
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/middlewaredefs"
 	agentmodeplugin "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/plugins/agentmode"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
 	webchatruntime "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/runtime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/widgets"
@@ -109,19 +109,22 @@ func Run(ctx context.Context, parsed *values.Values, staticFS fs.FS) error {
 	if timelineBackend == "" && s.TimelineDSN == "" && s.TimelineDB == "" {
 		timelineBackend = serverkit.StoreBackendMemory
 	}
-	canonicalApp, err := appserver.NewServer(
-		appserver.WithHydrationStoreFactory(func(factoryCtx context.Context, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error) {
+	// chat-provider keeps the session id in the URL and session storage and
+	// reuses it after a server restart, so unknown ids create their session.
+	canonicalApp, err := httpapi.New(
+		httpapi.WithAutoCreateSessions(true),
+		httpapi.WithHydrationStoreFactory(func(factoryCtx context.Context, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error) {
 			return serverkit.OpenHydrationStore(factoryCtx, serverkit.StoreSpec{
 				Backend: timelineBackend,
 				DSN:     s.TimelineDSN,
 				Path:    s.TimelineDB,
 			}, reg)
 		}),
-		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
-		appserver.WithTurnStore(turnStore),
-		appserver.WithTurnsDBPath(s.TurnsDB),
-		appserver.WithFrontendToolManager(frontendToolManager),
-		appserver.WithChatPlugins(agentmodeplugin.NewPlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), frontendtools.NewPlugin(), widgets.NewWidgetPlugin()),
+		httpapi.WithRuntimeResolver(canonicalRuntimeResolver),
+		httpapi.WithTurnStore(turnStore),
+		httpapi.WithTurnsDBPath(s.TurnsDB),
+		httpapi.WithFrontendTools(frontendToolManager),
+		httpapi.WithChatPlugins(agentmodeplugin.NewPlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), frontendtools.NewPlugin(), widgets.NewWidgetPlugin()),
 	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")
